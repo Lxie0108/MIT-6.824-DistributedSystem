@@ -30,6 +30,8 @@ type ReqArgs struct {
 }
 
 type ReqReply struct {
+	Filename string
+	TaskType string
 }
 
 // Cook up a unique-ish UNIX-domain socket name

@@ -1,6 +1,7 @@
 package mr
 
 import (
+	"errors"
 	"fmt"
 	"hash/fnv"
 	"log"
@@ -34,12 +35,31 @@ func Worker(mapf func(string, string) []KeyValue,
 	// uncomment to send the Example RPC to the master.
 	// CallExample()
 
+	for {
+		reply, error := ReqTask()
+		if error != nil {
+			break
+		}
+		switch reply.TaskType {
+		case "map":
+			Map(mapf)
+		case "reduce":
+			Reduce(reducef)
+		}
+
+	}
+
 }
 
 //workers ask for a task
-func RequestTask() ReqReply {
+func ReqTask() (ReqReply, error) {
 	args := ReqArgs{}
 	reply := ReqReply{}
+	ok := call("Master.AssignTask", &args, &reply)
+	if !ok {
+		return reply, errors.New("no response")
+	}
+	return reply, nil
 }
 
 //workers do map task
@@ -48,7 +68,7 @@ func Map(mapf func(string, string) []KeyValue) {
 }
 
 //workers do reduce task
-func Reduce(reducef func(string, []string)) {
+func Reduce(reducef func(string, []string) string) {
 
 }
 
