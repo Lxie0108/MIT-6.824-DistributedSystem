@@ -16,7 +16,7 @@ type Master struct {
 // Your code here -- RPC handlers for the worker to call.
 
 //master assigns tasks to workers
-func (m *Master) Request(args *RequestArgs, reply *RequestReply) error {
+func (m *Master) ReqTask(args *ReqTaskArgs, reply *ReqReply) error {
 
 }
 
