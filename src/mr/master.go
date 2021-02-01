@@ -1,10 +1,12 @@
 package mr
 
-import "log"
-import "net"
-import "os"
-import "net/rpc"
-import "net/http"
+import (
+	"log"
+	"net"
+	"net/http"
+	"net/rpc"
+	"os"
+)
 
 type Master struct {
 	// Your definitions here.
@@ -12,6 +14,11 @@ type Master struct {
 }
 
 // Your code here -- RPC handlers for the worker to call.
+
+//master assigns tasks to workers
+func (m *Master) Request(args *RequestArgs, reply *RequestReply) error {
+
+}
 
 //
 // an example RPC handler.
