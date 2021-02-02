@@ -1,6 +1,7 @@
 package mr
 
 import (
+	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
@@ -10,14 +11,24 @@ import (
 
 type Master struct {
 	// Your definitions here.
+	NReduce    int
+	MapDone    bool
+	ReduceDone bool
+	MapTask    []Task
+	ReduceTask []Task
+}
 
+type Task struct {
+	TaskType string
+	Content  string
+	Filename string
 }
 
 // Your code here -- RPC handlers for the worker to call.
 
 //master assigns tasks to workers
-func (m *Master) AssignTask(args *AssignArgs, reply *AssignReply) error {
-
+func (m *Master) AssignTask(args *ReqArgs, reply *ReqReply) error {
+	return nil
 }
 
 //
@@ -54,7 +65,7 @@ func (m *Master) Done() bool {
 	ret := false
 
 	// Your code here.
-
+	ret = m.ReduceDone
 	return ret
 }
 
@@ -65,8 +76,38 @@ func (m *Master) Done() bool {
 //
 func MakeMaster(files []string, nReduce int) *Master {
 	m := Master{}
-
 	// Your code here.
+	m.MapTask = nil
+	m.ReduceTask = nil
+	m.NReduce = nReduce
+	m.MapDone = false
+	m.ReduceDone = false
+
+	//initialize map tasks, one file = one map task.
+	for _, filename := range files {
+		file, err := os.Open(filename)
+		if err != nil {
+			log.Fatalf("cannot open %v", filename)
+		}
+		content, err := ioutil.ReadAll(file)
+		if err != nil {
+			log.Fatalf("cannot read %v", filename)
+		}
+
+		file.Close()
+
+		m.MapTask = append(m.MapTask, Task{
+			TaskType: "Map",
+			Filename: filename,
+			Content:  string(content),
+		})
+	}
+
+	for i := 0; i < nReduce; i++ {
+		m.ReduceTask = append(m.ReduceTask, Task{
+			TaskType: "Reduce",
+		})
+	}
 
 	m.server()
 	return &m
