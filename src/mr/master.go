@@ -14,6 +14,7 @@ type Master struct {
 	NReduce    int
 	MapDone    bool
 	ReduceDone bool
+	State      string
 	MapTask    []Task
 	ReduceTask []Task
 }
@@ -22,12 +23,29 @@ type Task struct {
 	TaskType string
 	Content  string
 	Filename string
+	Id       int
 }
 
 // Your code here -- RPC handlers for the worker to call.
 
 //master assigns tasks to workers
-func (m *Master) AssignTask(args *ReqArgs, reply *ReqReply) error {
+func (m *Master) ReqTask(args *ReqArgs, reply *ReqReply) error {
+	switch m.State {
+	case "map_state":
+		for _, task := range m.MapTask {
+			reply.TaskType = "map"
+			reply.Filename = task.Filename
+			reply.TaskId = task.Id
+
+		}
+	case "reduce_state":
+		for _, task := range m.ReduceTask {
+			reply.TaskType = "reduce"
+			reply.Filename = task.Filename
+			reply.TaskId = task.Id
+		}
+	}
+
 	return nil
 }
 
@@ -84,7 +102,7 @@ func MakeMaster(files []string, nReduce int) *Master {
 	m.ReduceDone = false
 
 	//initialize map tasks, one file = one map task.
-	for _, filename := range files {
+	for i, filename := range files {
 		file, err := os.Open(filename)
 		if err != nil {
 			log.Fatalf("cannot open %v", filename)
@@ -100,12 +118,16 @@ func MakeMaster(files []string, nReduce int) *Master {
 			TaskType: "Map",
 			Filename: filename,
 			Content:  string(content),
+			Id:       i,
 		})
 	}
-
+	//initialize reduce tasks, there will be nReduce reduce tasks to use
 	for i := 0; i < nReduce; i++ {
 		m.ReduceTask = append(m.ReduceTask, Task{
 			TaskType: "Reduce",
+			Filename: " ",
+			Content:  " ",
+			Id:       i,
 		})
 	}
 
