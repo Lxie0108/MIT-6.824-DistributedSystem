@@ -33,6 +33,7 @@ type ReqReply struct {
 	Filename string
 	TaskType string
 	TaskId   int
+	NReduce  int
 }
 
 // Cook up a unique-ish UNIX-domain socket name

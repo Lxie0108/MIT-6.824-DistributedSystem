@@ -4,8 +4,10 @@ import (
 	"errors"
 	"fmt"
 	"hash/fnv"
+	"io/ioutil"
 	"log"
 	"net/rpc"
+	"os"
 )
 
 //
@@ -42,7 +44,7 @@ func Worker(mapf func(string, string) []KeyValue,
 		}
 		switch reply.TaskType {
 		case "map":
-			Map(mapf)
+			Map(&reply, mapf)
 		case "reduce":
 			Reduce(reducef)
 		}
@@ -55,7 +57,7 @@ func Worker(mapf func(string, string) []KeyValue,
 func ReqTask() (ReqReply, error) {
 	args := ReqArgs{}
 	reply := ReqReply{}
-	ok := call("Master.AssignTask", &args, &reply)
+	ok := call("Master.ReqTask", &args, &reply)
 	if !ok {
 		return reply, errors.New("no response")
 	}
@@ -63,7 +65,20 @@ func ReqTask() (ReqReply, error) {
 }
 
 //workers do map task
-func Map(mapf func(string, string) []KeyValue) {
+func Map(reply *ReqReply, mapf func(string, string) []KeyValue) {
+	file, err := os.Open(reply.Filename)
+	if err != nil {
+		log.Fatalf("cannot open %v", reply.Filename)
+	}
+	content, err := ioutil.ReadAll(file)
+	if err != nil {
+		log.Fatalf("cannot read %v", reply.Filename)
+	}
+	//send file to mapf and get the key-value array
+	kva := mapf(reply.filename, string(content))
+	//do partition
+
+	//then, write to intermediate file
 
 }
 

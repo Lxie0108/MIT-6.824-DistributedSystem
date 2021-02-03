@@ -36,13 +36,14 @@ func (m *Master) ReqTask(args *ReqArgs, reply *ReqReply) error {
 			reply.TaskType = "map"
 			reply.Filename = task.Filename
 			reply.TaskId = task.Id
-
+			reply.NReduce = m.NReduce
 		}
 	case "reduce_state":
 		for _, task := range m.ReduceTask {
 			reply.TaskType = "reduce"
 			reply.Filename = task.Filename
 			reply.TaskId = task.Id
+			reply.NReduce = m.NReduce
 		}
 	}
 
