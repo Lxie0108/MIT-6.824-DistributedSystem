@@ -108,6 +108,24 @@ func Map(reply *ReqReply, mapf func(string, string) []KeyValue) {
 //workers do reduce task
 func Reduce(reply *ReqReply, reducef func(string, []string) string) {
 	//read temp files using Json
+	maps := map[string][]string{}
+	for i := 0; i < reply.NReduce; i++ {
+		filename := "mr-" + strconv.Itoa(i) + "-" + strconv.Itoa(reply.TaskId)
+		file, err := os.Open(filename)
+		if err != nil {
+			fmt.Println("Open " + filename + " failed")
+			return
+		}
+		dec := json.NewDecoder(file)
+		for {
+			var kv KeyValue
+			if err := dec.Decode(&kv); err != nil {
+				break
+			}
+			maps[kv.Key] = append(kvMap[kv.Key], kv.Value)
+		}
+		file.Close()
+	}
 
 	//then sort
 
