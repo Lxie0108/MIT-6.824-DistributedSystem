@@ -107,7 +107,11 @@ func Map(reply *ReqReply, mapf func(string, string) []KeyValue) {
 
 //workers do reduce task
 func Reduce(reply *ReqReply, reducef func(string, []string) string) {
+	//read temp files using Json
 
+	//then sort
+
+	//finally write to mr-out
 }
 
 func ChangeTaskState(TaskType string, TaskId int) {
