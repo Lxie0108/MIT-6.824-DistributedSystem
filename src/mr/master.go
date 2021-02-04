@@ -1,7 +1,6 @@
 package mr
 
 import (
-	"fmt"
 	"io/ioutil"
 	"log"
 	"net"
@@ -13,6 +12,7 @@ import (
 type Master struct {
 	// Your definitions here.
 	NReduce    int
+	NMap       int
 	State      string
 	MapTask    []Task
 	ReduceTask []Task
@@ -38,6 +38,7 @@ func (m *Master) ReqTask(args *ReqArgs, reply *ReqReply) error {
 				reply.Filename = task.Filename
 				reply.TaskId = task.Id
 				reply.NReduce = m.NReduce
+				reply.NMap = m.NMap
 			}
 		}
 	case "reduce_state":
@@ -47,6 +48,7 @@ func (m *Master) ReqTask(args *ReqArgs, reply *ReqReply) error {
 				reply.Filename = task.Filename
 				reply.TaskId = task.Id
 				reply.NReduce = m.NReduce
+				reply.NMap = m.NMap
 			}
 		}
 	}
@@ -67,7 +69,7 @@ func (m *Master) ChangeTaskState(args *ChangeTaskStateArgs, reply *ChangeTaskSta
 
 //check if all workers have finished map phase/ reduce phase, if so, move to the next phase
 func (m *Master) CheckFinishPhase() error {
-	fmt.Printf("reach checkFinish")
+	//fmt.Printf("reach checkFinish")
 	switch m.State {
 	case "map_state":
 		for _, task := range m.MapTask {
@@ -138,6 +140,7 @@ func MakeMaster(files []string, nReduce int) *Master {
 	m.MapTask = []Task{}
 	m.ReduceTask = []Task{}
 	m.NReduce = nReduce
+	m.NMap = len(files)
 	m.State = " "
 
 	//initialize map tasks, one file = one map task.

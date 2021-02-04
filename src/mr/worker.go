@@ -9,6 +9,7 @@ import (
 	"log"
 	"net/rpc"
 	"os"
+	"sort"
 	"strconv"
 )
 
@@ -50,6 +51,7 @@ func Worker(mapf func(string, string) []KeyValue,
 			ChangeTaskState(reply.TaskType, reply.TaskId)
 		case "reduce":
 			Reduce(&reply, reducef)
+			ChangeTaskState(reply.TaskType, reply.TaskId)
 		}
 	}
 
@@ -63,7 +65,7 @@ func ReqTask() (ReqReply, error) {
 	if !ok {
 		return reply, errors.New("no response")
 	}
-	fmt.Printf("Reached ReqTask")
+	//fmt.Printf("Reached ReqTask")
 	return reply, nil
 }
 
@@ -79,7 +81,7 @@ func Map(reply *ReqReply, mapf func(string, string) []KeyValue) {
 	}
 	file.Close()
 
-	fmt.Printf("reached Map")
+	//fmt.Printf("reached Map")
 	//send file to mapf and get the key-value array
 	kva := mapf(reply.Filename, string(content))
 	//do partition
@@ -109,7 +111,7 @@ func Map(reply *ReqReply, mapf func(string, string) []KeyValue) {
 func Reduce(reply *ReqReply, reducef func(string, []string) string) {
 	//read temp files using Json
 	maps := map[string][]string{}
-	for i := 0; i < reply.NReduce; i++ {
+	for i := 0; i < reply.NMap; i++ {
 		filename := "mr-" + strconv.Itoa(i) + "-" + strconv.Itoa(reply.TaskId)
 		file, err := os.Open(filename)
 		if err != nil {
@@ -122,14 +124,23 @@ func Reduce(reply *ReqReply, reducef func(string, []string) string) {
 			if err := dec.Decode(&kv); err != nil {
 				break
 			}
-			maps[kv.Key] = append(kvMap[kv.Key], kv.Value)
+			maps[kv.Key] = append(maps[kv.Key], kv.Value)
 		}
 		file.Close()
 	}
-
 	//then sort
-
+	keys := []string{}
+	for key, _ := range maps {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
 	//finally write to mr-out
+	output, _ := os.Create("mr-out-" + strconv.Itoa(reply.TaskId))
+	for _, key := range keys {
+		cnt := reducef(key, maps[key])
+		output.WriteString(fmt.Sprintf("%v %v\n", key, cnt))
+	}
+	output.Close()
 }
 
 func ChangeTaskState(TaskType string, TaskId int) {

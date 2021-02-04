@@ -34,6 +34,7 @@ type ReqReply struct {
 	TaskType string
 	TaskId   int
 	NReduce  int
+	NMap     int
 	State    string
 }
 
