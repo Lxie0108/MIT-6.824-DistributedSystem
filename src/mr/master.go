@@ -1,6 +1,7 @@
 package mr
 
 import (
+	"fmt"
 	"io/ioutil"
 	"log"
 	"net"
@@ -32,27 +33,31 @@ func (m *Master) ReqTask(args *ReqArgs, reply *ReqReply) error {
 	switch m.State {
 	case "map_state":
 		for _, task := range m.MapTask {
-			reply.TaskType = "map"
-			reply.Filename = task.Filename
-			reply.TaskId = task.Id
-			reply.NReduce = m.NReduce
+			if task.State == "idle" {
+				reply.TaskType = "map"
+				reply.Filename = task.Filename
+				reply.TaskId = task.Id
+				reply.NReduce = m.NReduce
+			}
 		}
 	case "reduce_state":
 		for _, task := range m.ReduceTask {
-			reply.TaskType = "reduce"
-			reply.Filename = task.Filename
-			reply.TaskId = task.Id
-			reply.NReduce = m.NReduce
+			if task.State == "idle" {
+				reply.TaskType = "reduce"
+				reply.Filename = task.Filename
+				reply.TaskId = task.Id
+				reply.NReduce = m.NReduce
+			}
 		}
 	}
-
 	return nil
 }
 
-//change task stae to "complete"
+//change task state to "complete"
 func (m *Master) ChangeTaskState(args *ChangeTaskStateArgs, reply *ChangeTaskStateReply) error {
 	if args.TaskType == "map" {
 		m.MapTask[args.TaskId].State = "map_complete"
+		//fmt.Printf("task state %s", m.MapTask[args.TaskId].State)
 	} else if args.TaskType == "reduce" {
 		m.ReduceTask[args.TaskId].State = "reduce_complete"
 	}
@@ -62,6 +67,7 @@ func (m *Master) ChangeTaskState(args *ChangeTaskStateArgs, reply *ChangeTaskSta
 
 //check if all workers have finished map phase/ reduce phase, if so, move to the next phase
 func (m *Master) CheckFinishPhase() error {
+	fmt.Printf("reach checkFinish")
 	switch m.State {
 	case "map_state":
 		for _, task := range m.MapTask {
@@ -129,10 +135,10 @@ func (m *Master) Done() bool {
 func MakeMaster(files []string, nReduce int) *Master {
 	m := Master{}
 	// Your code here.
-	m.MapTask = nil
-	m.ReduceTask = nil
+	m.MapTask = []Task{}
+	m.ReduceTask = []Task{}
 	m.NReduce = nReduce
-	m.State = "map_state"
+	m.State = " "
 
 	//initialize map tasks, one file = one map task.
 	for i, filename := range files {
@@ -145,15 +151,14 @@ func MakeMaster(files []string, nReduce int) *Master {
 			log.Fatalf("cannot read %v", filename)
 		}
 
-		file.Close()
-
 		m.MapTask = append(m.MapTask, Task{
 			TaskType: "map",
 			Filename: filename,
 			Content:  string(content),
-			State:    " ",
+			State:    "idle",
 			Id:       i,
 		})
+		file.Close()
 	}
 	//initialize reduce tasks, there will be nReduce reduce tasks to use
 	for i := 0; i < nReduce; i++ {
@@ -161,11 +166,11 @@ func MakeMaster(files []string, nReduce int) *Master {
 			TaskType: "reduce",
 			Filename: " ",
 			Content:  " ",
-			State:    " ",
+			State:    "idle",
 			Id:       i,
 		})
 	}
-
+	m.State = "map_state"
 	m.server()
 	return &m
 }

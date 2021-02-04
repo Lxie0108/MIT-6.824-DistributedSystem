@@ -42,18 +42,15 @@ func Worker(mapf func(string, string) []KeyValue,
 	for {
 		reply, error := ReqTask()
 		if error != nil {
-			break
-		}
-		if reply.TaskType == "" {
-			break
+			continue
 		}
 		switch reply.TaskType {
 		case "map":
 			Map(&reply, mapf)
+			ChangeTaskState(reply.TaskType, reply.TaskId)
 		case "reduce":
-			Reduce(reducef)
+			Reduce(&reply, reducef)
 		}
-
 	}
 
 }
@@ -106,11 +103,10 @@ func Map(reply *ReqReply, mapf func(string, string) []KeyValue) {
 			dec.Encode(&kv)
 		}
 	}
-	ChangeTaskState(reply.TaskType, reply.TaskId)
 }
 
 //workers do reduce task
-func Reduce(reducef func(string, []string) string) {
+func Reduce(reply *ReqReply, reducef func(string, []string) string) {
 
 }
 

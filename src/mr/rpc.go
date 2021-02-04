@@ -34,6 +34,7 @@ type ReqReply struct {
 	TaskType string
 	TaskId   int
 	NReduce  int
+	State    string
 }
 
 type ChangeTaskStateArgs struct {
