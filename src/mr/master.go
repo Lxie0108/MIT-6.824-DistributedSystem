@@ -50,6 +50,11 @@ func (m *Master) ReqTask(args *ReqArgs, reply *ReqReply) error {
 	return nil
 }
 
+//check if all workers have finished map phase/ reduce phase, if so, move to the next phase
+func(m* Master) CheckFinishPhase(args *ReqArgs, reply *ReqReply) error {{
+
+}
+
 //
 // an example RPC handler.
 //
