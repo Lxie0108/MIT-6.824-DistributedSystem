@@ -36,6 +36,14 @@ type ReqReply struct {
 	NReduce  int
 }
 
+type ChangeTaskStateArgs struct {
+	TaskType string
+	TaskId   int
+}
+
+type ChangeTaskStateReply struct {
+}
+
 // Cook up a unique-ish UNIX-domain socket name
 // in /var/tmp, for the master.
 // Can't use the current directory since

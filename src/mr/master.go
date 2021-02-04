@@ -12,8 +12,6 @@ import (
 type Master struct {
 	// Your definitions here.
 	NReduce    int
-	MapDone    bool
-	ReduceDone bool
 	State      string
 	MapTask    []Task
 	ReduceTask []Task
@@ -23,6 +21,7 @@ type Task struct {
 	TaskType string
 	Content  string
 	Filename string
+	State    string
 	Id       int
 }
 
@@ -50,9 +49,36 @@ func (m *Master) ReqTask(args *ReqArgs, reply *ReqReply) error {
 	return nil
 }
 
-//check if all workers have finished map phase/ reduce phase, if so, move to the next phase
-func(m* Master) CheckFinishPhase(args *ReqArgs, reply *ReqReply) error {{
+//change task stae to "complete"
+func (m *Master) ChangeTaskState(args *ChangeTaskStateArgs, reply *ChangeTaskStateReply) error {
+	if args.TaskType == "map" {
+		m.MapTask[args.TaskId].State = "map_complete"
+	} else if args.TaskType == "reduce" {
+		m.ReduceTask[args.TaskId].State = "reduce_complete"
+	}
+	m.CheckFinishPhase()
+	return nil
+}
 
+//check if all workers have finished map phase/ reduce phase, if so, move to the next phase
+func (m *Master) CheckFinishPhase() error {
+	switch m.State {
+	case "map_state":
+		for _, task := range m.MapTask {
+			if task.State != "map_complete" {
+				return nil
+			}
+		}
+		m.State = "reduce_state"
+	case "reduce_state":
+		for _, task := range m.ReduceTask {
+			if task.State != "reduce_complete" {
+				return nil
+			}
+		}
+		m.State = "complete"
+	}
+	return nil
 }
 
 //
@@ -89,7 +115,9 @@ func (m *Master) Done() bool {
 	ret := false
 
 	// Your code here.
-	ret = m.ReduceDone
+	if m.State == "complete" {
+		ret = true
+	}
 	return ret
 }
 
@@ -104,8 +132,6 @@ func MakeMaster(files []string, nReduce int) *Master {
 	m.MapTask = nil
 	m.ReduceTask = nil
 	m.NReduce = nReduce
-	m.MapDone = false
-	m.ReduceDone = false
 	m.State = "map_state"
 
 	//initialize map tasks, one file = one map task.
@@ -122,18 +148,20 @@ func MakeMaster(files []string, nReduce int) *Master {
 		file.Close()
 
 		m.MapTask = append(m.MapTask, Task{
-			TaskType: "Map",
+			TaskType: "map",
 			Filename: filename,
 			Content:  string(content),
+			State:    " ",
 			Id:       i,
 		})
 	}
 	//initialize reduce tasks, there will be nReduce reduce tasks to use
 	for i := 0; i < nReduce; i++ {
 		m.ReduceTask = append(m.ReduceTask, Task{
-			TaskType: "Reduce",
+			TaskType: "reduce",
 			Filename: " ",
 			Content:  " ",
+			State:    " ",
 			Id:       i,
 		})
 	}

@@ -105,14 +105,22 @@ func Map(reply *ReqReply, mapf func(string, string) []KeyValue) {
 		for _, kv := range res[i] {
 			dec.Encode(&kv)
 		}
-
 	}
-
+	ChangeTaskState(reply.TaskType, reply.TaskId)
 }
 
 //workers do reduce task
 func Reduce(reducef func(string, []string) string) {
 
+}
+
+func ChangeTaskState(TaskType string, TaskId int) {
+	args := ChangeTaskStateArgs{
+		TaskType: TaskType,
+		TaskId:   TaskId,
+	}
+	reply := ChangeTaskStateReply{}
+	call("Master.ChangeTaskState", &args, &reply)
 }
 
 //
