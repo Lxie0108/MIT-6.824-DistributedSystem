@@ -1,6 +1,7 @@
 package mr
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"hash/fnv"
@@ -8,6 +9,7 @@ import (
 	"log"
 	"net/rpc"
 	"os"
+	"strconv"
 )
 
 //
@@ -74,40 +76,37 @@ func Map(reply *ReqReply, mapf func(string, string) []KeyValue) {
 	if err != nil {
 		log.Fatalf("cannot read %v", reply.Filename)
 	}
+	file.Close()
 	//send file to mapf and get the key-value array
-	kva := mapf(reply.filename, string(content))
+	kva := mapf(reply.Filename, string(content))
 	//do partition
+	res := make([][]KeyValue, reply.NReduce)
+	for _, kv := range kva {
+		v := ihash(kv.Key) % reply.NReduce
+		res[v] = append(res[v], kv)
+	}
 
-	//then, write to intermediate file
+	//then, write to temp file
+	for i := 0; i < reply.NReduce; i++ {
+		tempFilename := "mr-" + strconv.Itoa(reply.TaskId) + "-" + strconv.Itoa(i) // mr-X-Y, x is the map task number and y is the reduce task number
+		tempFile, err := os.Create(tempFilename)
+		if err != nil {
+			log.Fatalf("error")
+		}
+		file.Close()
+		//use Go's encoding/json to store in file
+		dec := json.NewEncoder(tempFile)
+		for _, kv := range res[i] {
+			dec.Encode(&kv)
+		}
+
+	}
 
 }
 
 //workers do reduce task
 func Reduce(reducef func(string, []string) string) {
 
-}
-
-//
-// example function to show how to make an RPC call to the master.
-//
-// the RPC argument and reply types are defined in rpc.go.
-//
-func CallExample() {
-
-	// declare an argument structure.
-	args := ExampleArgs{}
-
-	// fill in the argument(s).
-	args.X = 99
-
-	// declare a reply structure.
-	reply := ExampleReply{}
-
-	// send the RPC request, wait for the reply.
-	call("Master.Example", &args, &reply)
-
-	// reply.Y should be 100.
-	fmt.Printf("reply.Y %v\n", reply.Y)
 }
 
 //
