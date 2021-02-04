@@ -44,6 +44,9 @@ func Worker(mapf func(string, string) []KeyValue,
 		if error != nil {
 			break
 		}
+		if reply.TaskType == "" {
+			break
+		}
 		switch reply.TaskType {
 		case "map":
 			Map(&reply, mapf)
@@ -63,6 +66,7 @@ func ReqTask() (ReqReply, error) {
 	if !ok {
 		return reply, errors.New("no response")
 	}
+	fmt.Printf("Reached ReqTask")
 	return reply, nil
 }
 
@@ -77,6 +81,8 @@ func Map(reply *ReqReply, mapf func(string, string) []KeyValue) {
 		log.Fatalf("cannot read %v", reply.Filename)
 	}
 	file.Close()
+
+	fmt.Printf("reached Map")
 	//send file to mapf and get the key-value array
 	kva := mapf(reply.Filename, string(content))
 	//do partition
@@ -107,6 +113,29 @@ func Map(reply *ReqReply, mapf func(string, string) []KeyValue) {
 //workers do reduce task
 func Reduce(reducef func(string, []string) string) {
 
+}
+
+//
+// example function to show how to make an RPC call to the master.
+//
+// the RPC argument and reply types are defined in rpc.go.
+//
+func CallExample() {
+
+	// declare an argument structure.
+	args := ExampleArgs{}
+
+	// fill in the argument(s).
+	args.X = 99
+
+	// declare a reply structure.
+	reply := ExampleReply{}
+
+	// send the RPC request, wait for the reply.
+	call("Master.Example", &args, &reply)
+
+	// reply.Y should be 100.
+	fmt.Printf("reply.Y %v\n", reply.Y)
 }
 
 //

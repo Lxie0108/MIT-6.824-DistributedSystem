@@ -101,6 +101,7 @@ func MakeMaster(files []string, nReduce int) *Master {
 	m.NReduce = nReduce
 	m.MapDone = false
 	m.ReduceDone = false
+	m.State = "map_state"
 
 	//initialize map tasks, one file = one map task.
 	for i, filename := range files {
