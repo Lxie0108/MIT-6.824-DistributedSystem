@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/rpc"
 	"os"
+	"sync"
 )
 
 type Master struct {
@@ -16,6 +17,7 @@ type Master struct {
 	State      string
 	MapTask    []Task
 	ReduceTask []Task
+	mu         sync.Mutex
 }
 
 type Task struct {
@@ -30,6 +32,7 @@ type Task struct {
 
 //master assigns tasks to workers
 func (m *Master) ReqTask(args *ReqArgs, reply *ReqReply) error {
+	m.mu.Lock()
 	switch m.State {
 	case "map_state":
 		for _, task := range m.MapTask {
@@ -52,6 +55,7 @@ func (m *Master) ReqTask(args *ReqArgs, reply *ReqReply) error {
 			}
 		}
 	}
+	m.mu.Unlock()
 	return nil
 }
 
@@ -142,6 +146,7 @@ func MakeMaster(files []string, nReduce int) *Master {
 	m.NReduce = nReduce
 	m.NMap = len(files)
 	m.State = " "
+	m.mu = sync.Mutex{}
 
 	//initialize map tasks, one file = one map task.
 	for i, filename := range files {
