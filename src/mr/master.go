@@ -8,6 +8,7 @@ import (
 	"net/rpc"
 	"os"
 	"sync"
+	"time"
 )
 
 type Master struct {
@@ -26,6 +27,7 @@ type Task struct {
 	Filename string
 	State    string
 	Id       int
+	Time     time.Time
 }
 
 // Your code here -- RPC handlers for the worker to call.
@@ -33,28 +35,34 @@ type Task struct {
 //master assigns tasks to workers
 func (m *Master) ReqTask(args *ReqArgs, reply *ReqReply) error {
 	m.mu.Lock()
+	defer m.mu.Unlock()
 	switch m.State {
 	case "map_state":
-		for _, task := range m.MapTask {
-			if task.State == "idle" {
+		for i, task := range m.MapTask {
+			if task.State == "idle" || (task.State == "busy" && time.Now().Sub(task.Time) >= 10*time.Second) { //second condition, give up stalled workers
 				reply.TaskType = "map"
 				reply.Filename = task.Filename
 				reply.TaskId = task.Id
 				reply.NReduce = m.NReduce
+				m.MapTask[i].State = "busy"
+				m.MapTask[i].Time = time.Now()
+				return nil
 			}
 		}
 	case "reduce_state":
-		for _, task := range m.ReduceTask {
-			if task.State == "idle" {
+		for i, task := range m.ReduceTask {
+			if task.State == "idle" || (task.State == "busy" && time.Now().Sub(task.Time) >= 10*time.Second) {
 				reply.TaskType = "reduce"
 				reply.Filename = task.Filename
 				reply.TaskId = task.Id
 				reply.NReduce = m.NReduce
 				reply.NMap = m.NMap
+				m.ReduceTask[i].State = "busy"
+				m.ReduceTask[i].Time = time.Now()
+				return nil
 			}
 		}
 	}
-	m.mu.Unlock()
 	return nil
 }
 
@@ -157,6 +165,7 @@ func MakeMaster(files []string, nReduce int) *Master {
 		if err != nil {
 			log.Fatalf("cannot read %v", filename)
 		}
+		defer file.Close()
 
 		m.MapTask = append(m.MapTask, Task{
 			TaskType: "map",
@@ -165,7 +174,7 @@ func MakeMaster(files []string, nReduce int) *Master {
 			State:    "idle",
 			Id:       i,
 		})
-		file.Close()
+		//file.Close()
 	}
 	//initialize reduce tasks, there will be nReduce reduce tasks to use
 	for i := 0; i < nReduce; i++ {

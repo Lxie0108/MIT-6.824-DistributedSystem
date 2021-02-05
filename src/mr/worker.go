@@ -46,6 +46,9 @@ func Worker(mapf func(string, string) []KeyValue,
 		if error != nil {
 			continue
 		}
+		if reply.TaskType == "" {
+			continue
+		}
 		switch reply.TaskType {
 		case "map":
 			Map(&reply, mapf)
@@ -82,13 +85,13 @@ func Map(reply *ReqReply, mapf func(string, string) []KeyValue) {
 	if err != nil {
 		log.Fatalf("cannot read %v", reply.Filename)
 	}
-	file.Close()
-
+	defer file.Close()
+	//file.Close()
 	//fmt.Printf("reached Map")
 	//send file to mapf and get the key-value array
 	kva := mapf(reply.Filename, string(content))
 	//do partition
-	res := make([][]KeyValue, reply.NReduce)
+	res := make(map[int][]KeyValue, reply.NReduce)
 	for _, kv := range kva {
 		v := ihash(kv.Key) % reply.NReduce
 		res[v] = append(res[v], kv)
@@ -101,7 +104,6 @@ func Map(reply *ReqReply, mapf func(string, string) []KeyValue) {
 		if err != nil {
 			log.Fatalf("error")
 		}
-		file.Close()
 		//use Go's encoding/json to store in file
 		dec := json.NewEncoder(tempFile)
 		for _, kv := range res[i] {
@@ -121,6 +123,7 @@ func Reduce(reply *ReqReply, reducef func(string, []string) string) {
 			fmt.Println("Open " + filename + " failed")
 			return
 		}
+		defer file.Close()
 		dec := json.NewDecoder(file)
 		for {
 			var kv KeyValue
@@ -129,7 +132,7 @@ func Reduce(reply *ReqReply, reducef func(string, []string) string) {
 			}
 			maps[kv.Key] = append(maps[kv.Key], kv.Value)
 		}
-		file.Close()
+		//file.Close()
 	}
 	//then sort
 	keys := []string{}
@@ -139,11 +142,12 @@ func Reduce(reply *ReqReply, reducef func(string, []string) string) {
 	sort.Strings(keys)
 	//finally write to mr-out
 	output, _ := os.Create("mr-out-" + strconv.Itoa(reply.TaskId))
+	defer output.Close()
 	for _, key := range keys {
 		cnt := reducef(key, maps[key])
 		output.WriteString(fmt.Sprintf("%v %v\n", key, cnt))
 	}
-	output.Close()
+	//output.Close()
 }
 
 func ChangeTaskState(TaskType string, TaskId int) {
