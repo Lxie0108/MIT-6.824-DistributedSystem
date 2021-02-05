@@ -11,6 +11,7 @@ import (
 	"os"
 	"sort"
 	"strconv"
+	"time"
 )
 
 //
@@ -49,9 +50,11 @@ func Worker(mapf func(string, string) []KeyValue,
 		case "map":
 			Map(&reply, mapf)
 			ChangeTaskState(reply.TaskType, reply.TaskId)
+			time.Sleep(time.Millisecond)
 		case "reduce":
 			Reduce(&reply, reducef)
 			ChangeTaskState(reply.TaskType, reply.TaskId)
+			time.Sleep(time.Millisecond)
 		}
 	}
 

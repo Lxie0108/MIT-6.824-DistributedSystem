@@ -41,7 +41,6 @@ func (m *Master) ReqTask(args *ReqArgs, reply *ReqReply) error {
 				reply.Filename = task.Filename
 				reply.TaskId = task.Id
 				reply.NReduce = m.NReduce
-				reply.NMap = m.NMap
 			}
 		}
 	case "reduce_state":
