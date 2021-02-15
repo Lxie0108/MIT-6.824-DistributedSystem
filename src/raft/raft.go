@@ -140,6 +140,27 @@ type RequestVoteReply struct {
 	VoteGranted bool
 }
 
+// AppendEntries RPC argument structure
+type AppendEntriesArgs struct {
+	Term     int
+	LeaderId int
+}
+
+// AppendEntries RPC reply structure
+type AppendEntriesReply struct {
+	Term    int
+	Success bool
+}
+
+func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply) {
+	if args.Term < rf.currentTerm { //Reply false if term < currentTerm (§5.1)
+		reply.Success = false
+	} else {
+		reply.Success = true
+		rf.currentTerm = args.Term
+	}
+}
+
 //
 // example RequestVote RPC handler.
 //
