@@ -166,6 +166,19 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 //
 func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 	// Your code here (2A, 2B).
+	if args.Term < rf.currentTerm {
+		reply.Term = rf.currentTerm
+		reply.VoteGranted = false
+	} else {
+		rf.currentTerm = args.Term
+		reply.VoteGranted = true
+		rf.votedFor = args.CandidateId
+		rf.convertTo("Follower")
+	}
+}
+
+func (rf *Raft) convertTo(state string) {
+
 }
 
 //
