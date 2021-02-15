@@ -73,6 +73,12 @@ func (rf *Raft) GetState() (int, bool) {
 	var term int
 	var isleader bool
 	// Your code here (2A).
+	term = rf.currentTerm
+	if rf.state == "Leader" {
+		isleader = true
+	} else {
+		isleader = false
+	}
 	return term, isleader
 }
 
