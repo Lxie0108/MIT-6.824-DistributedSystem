@@ -17,9 +17,13 @@ package raft
 //   in the same server.
 //
 
-import "sync"
-import "sync/atomic"
-import "../labrpc"
+import (
+	"sync"
+	"sync/atomic"
+	"time"
+
+	"../labrpc"
+)
 
 // import "bytes"
 // import "../labgob"
@@ -55,6 +59,11 @@ type Raft struct {
 	// Look at the paper's Figure 2 for a description of what
 	// state a Raft server must maintain.
 
+	currentTerm      int
+	votedFor         int
+	electionTimeout  time.Time
+	heartbeatTimeout time.Time
+	state            string
 }
 
 // return currentTerm and whether this server
@@ -226,6 +235,11 @@ func Make(peers []*labrpc.ClientEnd, me int,
 	rf.me = me
 
 	// Your initialization code here (2A, 2B, 2C).
+	rf.currentTerm = 0
+	rf.votedFor = 0
+	rf.electionTimeout = time.NewTimer()
+	rf.heartbeatTimeout = time.NewTimer()
+	rf.state = "Follower"
 
 	// initialize from state persisted before a crash
 	rf.readPersist(persister.ReadRaftState())
