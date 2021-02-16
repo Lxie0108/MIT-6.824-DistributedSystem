@@ -195,16 +195,23 @@ func (rf *Raft) getRandomDuration() time.Duration {
 
 //convert the state of the server: "Follower", "Candidate", "Leader"
 func (rf *Raft) convertTo(state string) {
-	switch state {
-	case "Follower":
-		rf.heartbeatTimer.Stop()
-		rf.electionTimer.Reset(rf.getRandomDuration())
-	case "Candidate":
-		rf.doElection()
-	case "Leader":
-		rf.electionTimer.Stop()
-		rf.broadcastHeartbeat()
-		rf.heartbeatTimer.Reset(HeartBeatInterval)
+	if state == rf.state {
+		return
+	} else {
+		switch state {
+		case "Follower":
+			rf.heartbeatTimer.Stop()
+			rf.electionTimer.Reset(rf.getRandomDuration())
+		case "Candidate":
+			rf.doElection()
+		case "Leader":
+			rf.electionTimer.Stop()
+			rf.broadcastHeartbeat()
+			rf.heartbeatTimer.Reset(HeartBeatInterval)
+		default:
+			return
+		}
+		rf.state = state
 	}
 }
 
