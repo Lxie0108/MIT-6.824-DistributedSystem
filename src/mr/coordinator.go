@@ -11,7 +11,8 @@ import (
 	"time"
 )
 
-type Master struct {
+
+type Coordinator struct {
 	// Your definitions here.
 	NReduce    int
 	NMap       int
@@ -105,19 +106,20 @@ func (m *Master) CheckFinishPhase() error {
 //
 // the RPC argument and reply types are defined in rpc.go.
 //
-func (m *Master) Example(args *ExampleArgs, reply *ExampleReply) error {
+func (c *Coordinator) Example(args *ExampleArgs, reply *ExampleReply) error {
 	reply.Y = args.X + 1
 	return nil
 }
 
+
 //
 // start a thread that listens for RPCs from worker.go
 //
-func (m *Master) server() {
-	rpc.Register(m)
+func (c *Coordinator) server() {
+	rpc.Register(c)
 	rpc.HandleHTTP()
 	//l, e := net.Listen("tcp", ":1234")
-	sockname := masterSock()
+	sockname := coordinatorSock()
 	os.Remove(sockname)
 	l, e := net.Listen("unix", sockname)
 	if e != nil {
@@ -127,26 +129,32 @@ func (m *Master) server() {
 }
 
 //
-// main/mrmaster.go calls Done() periodically to find out
+// main/mrcoordinator.go calls Done() periodically to find out
 // if the entire job has finished.
 //
-func (m *Master) Done() bool {
+func (c *Coordinator) Done() bool {
 	ret := false
 
 	// Your code here.
+
 	if m.State == "complete" {
 		ret = true
 	}
-	return ret
-}
+
+
+
+
 
 //
-// create a Master.
-// main/mrmaster.go calls this function.
+// create a Coordinator.
+// main/mrcoordinator.go calls this function.
 // nReduce is the number of reduce tasks to use.
 //
+
 func MakeMaster(files []string, nReduce int) *Master {
 	m := Master{}
+
+
 	// Your code here.
 	m.MapTask = []Task{}
 	m.ReduceTask = []Task{}
@@ -166,6 +174,7 @@ func MakeMaster(files []string, nReduce int) *Master {
 			log.Fatalf("cannot read %v", filename)
 		}
 		defer file.Close()
+
 
 		m.MapTask = append(m.MapTask, Task{
 			TaskType: "map",
