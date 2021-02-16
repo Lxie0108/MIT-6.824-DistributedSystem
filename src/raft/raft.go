@@ -18,11 +18,18 @@ package raft
 //
 
 import (
+	"math/rand"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"../labrpc"
+)
+
+const (
+	HeartBeatInterval  = 150 * time.Millisecond
+	ElectionTimeoutMin = 500
+	ElectionTimeoutMax = 800
 )
 
 // import "bytes"
@@ -59,11 +66,11 @@ type Raft struct {
 	// Look at the paper's Figure 2 for a description of what
 	// state a Raft server must maintain.
 
-	currentTerm      int
-	votedFor         int
-	electionTimeout  time.Time
-	heartbeatTimeout time.Time
-	state            string
+	currentTerm    int
+	votedFor       int
+	electionTimer  *time.Timer
+	heartbeatTimer *time.Timer
+	state          string
 }
 
 // return currentTerm and whether this server
@@ -158,6 +165,8 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 	} else {
 		reply.Success = true
 		rf.currentTerm = args.Term
+		rf.electionTimer.Reset(rf.getRandomDuration())
+		rf.convertTo("Follower")
 	}
 }
 
@@ -173,12 +182,25 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 		rf.currentTerm = args.Term
 		reply.VoteGranted = true
 		rf.votedFor = args.CandidateId
+		rf.electionTimer.Reset(rf.getRandomDuration())
 		rf.convertTo("Follower")
 	}
 }
 
-func (rf *Raft) convertTo(state string) {
+func (rf *Raft) getRandomDuration() time.Duration {
+	return time.Duration(rand.Intn(ElectionTimeoutMax-ElectionTimeoutMin)+ElectionTimeoutMin) * time.Millisecond
+}
 
+//convert the state of the server: "Follower", "Candidate", "Leader"
+func (rf *Raft) convertTo(state string) {
+	switch state {
+	case "Follower":
+
+	case "Candidate":
+
+	case "Leader":
+
+	}
 }
 
 //
@@ -260,6 +282,11 @@ func (rf *Raft) killed() bool {
 	return z == 1
 }
 
+//do periodic election
+func (rf *Raft) doElection() {
+
+}
+
 //
 // the service or tester wants to create a Raft server. the ports
 // of all the Raft servers (including this one) are in peers[]. this
@@ -280,9 +307,9 @@ func Make(peers []*labrpc.ClientEnd, me int,
 
 	// Your initialization code here (2A, 2B, 2C).
 	rf.currentTerm = 0
-	rf.votedFor = 0
-	rf.electionTimeout = time.NewTimer()
-	rf.heartbeatTimeout = time.NewTimer()
+	rf.votedFor = -1
+	rf.electionTimer = time.NewTimer(rf.getRandomDuration())
+	rf.heartbeatTimer = time.NewTimer(HeartBeatInterval)
 	rf.state = "Follower"
 
 	// initialize from state persisted before a crash
