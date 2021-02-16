@@ -195,11 +195,14 @@ func (rf *Raft) getRandomDuration() time.Duration {
 func (rf *Raft) convertTo(state string) {
 	switch state {
 	case "Follower":
-
+		rf.heartbeatTimer.Stop()
+		rf.electionTimer.Reset(rf.getRandomDuration())
 	case "Candidate":
-
+		rf.doElection()
 	case "Leader":
-
+		rf.electionTimer.Stop()
+		rf.boardcastHeartbeat()
+		rf.heartbeatTimer.Reset(HeartBeatInterval)
 	}
 }
 
@@ -284,6 +287,10 @@ func (rf *Raft) killed() bool {
 
 //do periodic election
 func (rf *Raft) doElection() {
+
+}
+
+func (rf *Raft) broadcastHeartbeat() {
 
 }
 
