@@ -80,6 +80,8 @@ func (rf *Raft) GetState() (int, bool) {
 	var term int
 	var isleader bool
 	// Your code here (2A).
+	rf.mu.Lock()
+	defer rf.mu.Unlock()
 	term = rf.currentTerm
 	if rf.state == "Leader" {
 		isleader = true
@@ -201,7 +203,7 @@ func (rf *Raft) convertTo(state string) {
 		rf.doElection()
 	case "Leader":
 		rf.electionTimer.Stop()
-		rf.boardcastHeartbeat()
+		rf.broadcastHeartbeat()
 		rf.heartbeatTimer.Reset(HeartBeatInterval)
 	}
 }
@@ -285,9 +287,39 @@ func (rf *Raft) killed() bool {
 	return z == 1
 }
 
-//do periodic election
+//start periodic election
+/**On conversion to candidate, start election:
+• Increment currentTerm
+• Vote for self
+• Reset election timer
+• Send RequestVote RPCs to all other servers
+• If votes received from majority of servers: become leader
+• If AppendEntries RPC received from new leader: convert to
+follower
+• If election timeout elapses: start new election**/
 func (rf *Raft) doElection() {
+	rf.currentTerm++
+	rf.votedFor = rf.me
+	rf.electionTimer.Reset(rf.getRandomDuration())
+	for i := 0; i < len(rf.peers); i++ {
+		if i == rf.me {
+			continue
+		}
+		go func(server int) {
 
+			args := RequestVoteArgs{
+				Term:        rf.currentTerm,
+				CandidateId: rf.me,
+			}
+			reply := RequestVoteReply{}
+			ok := rf.sendRequestVote(i, &args, &reply)
+			if !ok {
+				return
+			}
+			rf.mu.Lock()
+			defer rf.mu.Unlock()
+		}(i)
+	}
 }
 
 func (rf *Raft) broadcastHeartbeat() {
