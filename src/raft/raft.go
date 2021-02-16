@@ -300,7 +300,9 @@ follower
 func (rf *Raft) doElection() {
 	rf.currentTerm++
 	rf.votedFor = rf.me
+	nVotes := 1
 	rf.electionTimer.Reset(rf.getRandomDuration())
+	nMajority := len(rf.peers)/2 + 1
 	for i := 0; i < len(rf.peers); i++ {
 		if i == rf.me {
 			continue
@@ -318,6 +320,19 @@ func (rf *Raft) doElection() {
 			}
 			rf.mu.Lock()
 			defer rf.mu.Unlock()
+			if rf.currentTerm < reply.Term { //revert to Follower
+				rf.currentTerm = args.Term
+				rf.votedFor = -1
+				rf.convertTo("Follower")
+				return
+			}
+
+			if reply.VoteGranted {
+				nVotes++
+				if nVotes >= nMajority {
+					rf.convertTo("Leader")
+				}
+			}
 		}(i)
 	}
 }
