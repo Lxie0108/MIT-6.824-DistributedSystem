@@ -346,12 +346,10 @@ func (rf *Raft) doElection() {
 	rf.votedFor = rf.me
 	nVotes := 1
 	rf.electionTimer.Reset(rf.getRandomDuration())
-
 	args := RequestVoteArgs{
 		Term:        rf.currentTerm,
 		CandidateId: rf.me,
 	}
-
 	nMajority := len(rf.peers) / 2
 	for i := 0; i < len(rf.peers); i++ {
 		if i == rf.me {
@@ -388,23 +386,18 @@ send initial empty AppendEntries RPCs
 (heartbeat) to each server; repeat during idle periods to
 prevent election timeouts (§5.2)**/
 func (rf *Raft) broadcastHeartbeat() {
-
 	rf.lastHeartBeat = time.Now().UnixNano()
-
 	args := AppendEntriesArgs{
 		Term:     rf.currentTerm,
 		LeaderId: rf.me,
 	}
-
 	for i := 0; i < len(rf.peers); i++ {
 		if i == rf.me {
 			continue
 		}
 		go func(server int) {
-
 			reply := AppendEntriesReply{}
 			if rf.sendAppendEntries(server, &args, &reply) {
-
 				rf.mu.Lock()
 				defer rf.mu.Unlock()
 				if rf.currentTerm < reply.Term { //revert to Follower
@@ -451,11 +444,9 @@ func (rf *Raft) periodicEvent() {
 			rf.mu.Lock()
 			if rf.state == "Candidate" {
 				rf.doElection()
-
 			}
 			if rf.state == "Follower" {
 				rf.convertTo("Candidate")
-
 			}
 			rf.mu.Unlock()
 		case <-rf.heartbeatTimer.C:
