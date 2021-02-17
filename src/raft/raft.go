@@ -427,9 +427,8 @@ func (rf *Raft) ticker() {
 		// Your code here to check if a leader election should
 		// be started and to randomize sleeping time using
 		// time.Sleep().
+		rf.mu.Lock()
 		if rf.state != "Leader" {
-			rf.mu.Lock()
-			//timePast := time.Now() - rf.lastHeartBeat
 			rf.mu.Unlock()
 			return
 		} else {
@@ -441,6 +440,34 @@ func (rf *Raft) ticker() {
 			}
 			rf.mu.Unlock()
 			time.Sleep(time.Millisecond * 10)
+		}
+	}
+}
+
+func (rf *Raft) periodicEvent() {
+	for {
+		select {
+		case <-rf.electionTimer.C:
+			rf.mu.Lock()
+			if rf.state == "Candidate" {
+				rf.doElection()
+
+			}
+			if rf.state == "Follower" {
+				rf.convertTo("Candidate")
+
+			}
+			rf.mu.Unlock()
+		case <-rf.heartbeatTimer.C:
+			rf.mu.Lock()
+			if rf.state != "Leader" {
+				rf.mu.Unlock()
+				return
+			} else {
+				rf.broadcastHeartbeat()
+				rf.heartbeatTimer.Reset(HeartBeatInterval)
+				rf.mu.Unlock()
+			}
 		}
 	}
 }
@@ -476,5 +503,9 @@ func Make(peers []*labrpc.ClientEnd, me int,
 	// start ticker goroutine to start elections
 	go rf.ticker()
 
+	//kicks off leader elections periodically
+	go rf.periodicEvent()
+
 	return rf
+
 }
