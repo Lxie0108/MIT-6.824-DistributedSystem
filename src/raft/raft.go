@@ -427,11 +427,11 @@ func (rf *Raft) ticker() {
 		// Your code here to check if a leader election should
 		// be started and to randomize sleeping time using
 		// time.Sleep().
-		if rf.state == "Leader" {
+		if rf.state != "Leader" {
 			rf.mu.Lock()
 			//timePast := time.Now() - rf.lastHeartBeat
 			rf.mu.Unlock()
-			time.Sleep(time.Millisecond * 10)
+			return
 		} else {
 			rf.mu.Lock()
 			timePast := time.Now().UnixNano() - rf.lastHeartBeat
