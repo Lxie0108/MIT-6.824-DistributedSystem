@@ -78,6 +78,7 @@ type Raft struct {
 	electionTimer  *time.Timer
 	heartbeatTimer *time.Timer
 	state          string
+	lastHeartBeat  int64
 }
 
 // return currentTerm and whether this server
@@ -345,17 +346,18 @@ func (rf *Raft) doElection() {
 	rf.votedFor = rf.me
 	nVotes := 1
 	rf.electionTimer.Reset(rf.getRandomDuration())
+
+	args := RequestVoteArgs{
+		Term:        rf.currentTerm,
+		CandidateId: rf.me,
+	}
+
 	nMajority := len(rf.peers)/2 + 1
 	for i := 0; i < len(rf.peers); i++ {
 		if i == rf.me {
 			continue
 		}
 		go func(server int, nVotes *int) {
-
-			args := RequestVoteArgs{
-				Term:        rf.currentTerm,
-				CandidateId: rf.me,
-			}
 
 			reply := RequestVoteReply{}
 			if rf.sendRequestVote(server, &args, &reply) {
@@ -387,16 +389,19 @@ send initial empty AppendEntries RPCs
 prevent election timeouts (§5.2)**/
 func (rf *Raft) broadcastHeartbeat() {
 
+	rf.lastHeartBeat = time.Now().UnixNano()
+
+	args := AppendEntriesArgs{
+		Term:     rf.currentTerm,
+		LeaderId: rf.me,
+	}
+
 	for i := 0; i < len(rf.peers); i++ {
 		if i == rf.me {
 			continue
 		}
 		go func(server int) {
 
-			args := AppendEntriesArgs{
-				Term:     rf.currentTerm,
-				LeaderId: rf.me,
-			}
 			reply := AppendEntriesReply{}
 			if rf.sendAppendEntries(server, &args, &reply) {
 
@@ -424,16 +429,15 @@ func (rf *Raft) ticker() {
 		// time.Sleep().
 		if rf.state == "Leader" {
 			rf.mu.Lock()
-			rf.broadcastHeartbeat()
-			rf.heartbeatTimer.Reset(HeartBeatInterval)
+			//timePast := time.Now() - rf.lastHeartBeat
 			rf.mu.Unlock()
 			time.Sleep(time.Millisecond * 10)
 		} else {
 			rf.mu.Lock()
-			if rf.state == "Follower" {
-				rf.convertTo("Candidate")
-			} else {
-				rf.doElection()
+			timePast := time.Now().UnixNano() - rf.lastHeartBeat
+			if timePast >= int64(HeartBeatInterval/time.Millisecond) {
+				rf.broadcastHeartbeat()
+				rf.heartbeatTimer.Reset(HeartBeatInterval)
 			}
 			rf.mu.Unlock()
 			time.Sleep(time.Millisecond * 10)
@@ -465,9 +469,6 @@ func Make(peers []*labrpc.ClientEnd, me int,
 	rf.electionTimer = time.NewTimer(rf.getRandomDuration())
 	rf.heartbeatTimer = time.NewTimer(HeartBeatInterval)
 	rf.state = "Follower"
-
-	go rf.doElection()
-	go rf.broadcastHeartbeat()
 
 	// initialize from state persisted before a crash
 	rf.readPersist(persister.ReadRaftState())
