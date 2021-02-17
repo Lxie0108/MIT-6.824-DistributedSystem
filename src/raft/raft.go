@@ -346,35 +346,36 @@ func (rf *Raft) doElection() {
 	nVotes := 1
 	rf.electionTimer.Reset(rf.getRandomDuration())
 	nMajority := len(rf.peers)/2 + 1
+	args := RequestVoteArgs{
+		Term:        rf.currentTerm,
+		CandidateId: rf.me,
+	}
+
 	for i := 0; i < len(rf.peers); i++ {
 		if i == rf.me {
 			continue
 		}
 		go func(server int) {
 
-			args := RequestVoteArgs{
-				Term:        rf.currentTerm,
-				CandidateId: rf.me,
-			}
 			reply := RequestVoteReply{}
-			ok := rf.sendRequestVote(i, &args, &reply)
-			if !ok {
-				return
-			}
-			rf.mu.Lock()
-			defer rf.mu.Unlock()
-			if rf.currentTerm < reply.Term { //revert to Follower
-				rf.currentTerm = args.Term
-				rf.votedFor = -1
-				rf.convertTo("Follower")
-				return
-			}
+			if rf.sendRequestVote(i, &args, &reply) {
 
-			if reply.VoteGranted {
-				nVotes++
-				if nVotes >= nMajority {
-					rf.convertTo("Leader")
+				rf.mu.Lock()
+				defer rf.mu.Unlock()
+				if reply.VoteGranted && rf.state == "Candidate" {
+					nVotes++
+					if nVotes >= nMajority {
+						rf.convertTo("Leader")
+					}
+				} else {
+					if rf.currentTerm < reply.Term { //revert to Follower
+						rf.currentTerm = args.Term
+						rf.votedFor = -1
+						rf.convertTo("Follower")
+					}
 				}
+			} else {
+				DPrintf("Error. Send request failed.")
 			}
 		}(i)
 	}
