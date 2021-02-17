@@ -23,7 +23,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"../labrpc"
+	"6.824/labrpc"
+	//"../labrpc"
 )
 
 const (
@@ -188,6 +189,8 @@ type AppendEntriesReply struct {
 }
 
 func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply) {
+	rf.mu.Lock()
+	defer rf.mu.Unlock()
 	if args.Term < rf.currentTerm { //Reply false if term < currentTerm (§5.1)
 		reply.Success = false
 	} else {
