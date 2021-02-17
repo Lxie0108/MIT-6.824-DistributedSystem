@@ -398,16 +398,17 @@ func (rf *Raft) broadcastHeartbeat() {
 				LeaderId: rf.me,
 			}
 			reply := AppendEntriesReply{}
-			ok := rf.sendAppendEntries(i, &args, &reply)
-			if !ok {
-				return
-			}
-			rf.mu.Lock()
-			defer rf.mu.Unlock()
-			if rf.currentTerm < reply.Term { //revert to Follower
-				rf.currentTerm = reply.Term
-				rf.convertTo("Follower")
-				return
+			if rf.sendAppendEntries(server, &args, &reply) {
+
+				rf.mu.Lock()
+				defer rf.mu.Unlock()
+				if rf.currentTerm < reply.Term { //revert to Follower
+					rf.currentTerm = reply.Term
+					rf.convertTo("Follower")
+					return
+				}
+			} else {
+				DPrintf("Error. Send appendEntries failed.")
 			}
 		}(i)
 	}
