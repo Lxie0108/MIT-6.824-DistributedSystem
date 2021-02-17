@@ -29,6 +29,7 @@ import (
 
 const (
 	HeartBeatInterval  = 150 * time.Millisecond
+	ElectionInterval   = 300 * time.Millisecond
 	ElectionTimeoutMin = 500
 	ElectionTimeoutMax = 800
 )
@@ -73,12 +74,13 @@ type Raft struct {
 	// Look at the paper's Figure 2 for a description of what
 	// state a Raft server must maintain.
 
-	currentTerm    int
-	votedFor       int
-	electionTimer  *time.Timer
-	heartbeatTimer *time.Timer
-	state          string
-	lastHeartBeat  int64
+	currentTerm       int
+	votedFor          int
+	electionTimer     *time.Timer
+	heartbeatTimer    *time.Timer
+	state             string
+	lastHeartBeatTime int64 //the last time when leader sent heartbeat
+	lastHeardTime     int64 //the last time when peer(follower) received heartbeat
 }
 
 // return currentTerm and whether this server
@@ -198,6 +200,7 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 		reply.Success = true
 		rf.currentTerm = args.Term
 		rf.electionTimer.Reset(rf.getRandomDuration())
+		rf.lastHeardTime = time.Now().UnixNano()
 		rf.convertTo("Follower")
 	}
 }
@@ -217,6 +220,7 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 		reply.VoteGranted = true
 		rf.votedFor = args.CandidateId
 		rf.electionTimer.Reset(rf.getRandomDuration())
+		rf.lastHeardTime = time.Now().UnixNano()
 		rf.convertTo("Follower")
 	}
 }
@@ -386,7 +390,7 @@ send initial empty AppendEntries RPCs
 (heartbeat) to each server; repeat during idle periods to
 prevent election timeouts (§5.2)**/
 func (rf *Raft) broadcastHeartbeat() {
-	rf.lastHeartBeat = time.Now().UnixNano()
+	rf.lastHeartBeatTime = time.Now().UnixNano()
 	args := AppendEntriesArgs{
 		Term:     rf.currentTerm,
 		LeaderId: rf.me,
@@ -421,12 +425,29 @@ func (rf *Raft) ticker() {
 		// be started and to randomize sleeping time using
 		// time.Sleep().
 		rf.mu.Lock()
-		if rf.state != "Leader" {
+		if rf.state != "Follower" {
 			rf.mu.Unlock()
-			return
 		} else {
 			rf.mu.Lock()
-			timePast := time.Now().UnixNano() - rf.lastHeartBeat
+			timePast := time.Now().UnixNano() - rf.lastHeardTime
+			if timePast >= int64(ElectionInterval/time.Millisecond) {
+				rf.doElection()
+			}
+			rf.mu.Unlock()
+			time.Sleep(time.Millisecond * 10)
+		}
+	}
+}
+
+func (rf *Raft) heartbeatTicker() {
+	for rf.killed() == false {
+
+		rf.mu.Lock()
+		if rf.state != "Leader" {
+			rf.mu.Unlock()
+		} else {
+			rf.mu.Lock()
+			timePast := time.Now().UnixNano() - rf.lastHeartBeatTime
 			if timePast >= int64(HeartBeatInterval/time.Millisecond) {
 				rf.broadcastHeartbeat()
 				rf.heartbeatTimer.Reset(HeartBeatInterval)
@@ -490,6 +511,8 @@ func Make(peers []*labrpc.ClientEnd, me int,
 
 	// start ticker goroutine to start elections
 	go rf.ticker()
+
+	go rf.heartbeatTicker()
 
 	//kicks off leader elections periodically
 	go rf.periodicEvent()
