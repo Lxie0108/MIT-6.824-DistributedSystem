@@ -206,6 +206,8 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 //
 func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 	// Your code here (2A, 2B).
+	rf.mu.Lock()
+	defer rf.mu.Unlock()
 	if args.Term < rf.currentTerm {
 		reply.Term = rf.currentTerm
 		reply.VoteGranted = false
@@ -418,7 +420,22 @@ func (rf *Raft) ticker() {
 		// Your code here to check if a leader election should
 		// be started and to randomize sleeping time using
 		// time.Sleep().
-
+		if rf.state == "Leader" {
+			rf.mu.Lock()
+			rf.broadcastHeartbeat()
+			rf.heartbeatTimer.Reset(HeartBeatInterval)
+			rf.mu.Unlock()
+			time.Sleep(time.Millisecond * 10)
+		} else {
+			rf.mu.Lock()
+			if rf.state == "Follower" {
+				rf.convertTo("Candidate")
+			} else {
+				rf.doElection()
+			}
+			rf.mu.Unlock()
+			time.Sleep(time.Millisecond * 10)
+		}
 	}
 }
 
