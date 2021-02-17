@@ -425,8 +425,9 @@ func (rf *Raft) ticker() {
 		// be started and to randomize sleeping time using
 		// time.Sleep().
 		rf.mu.Lock()
-		if rf.state != "Follower" {
+		if rf.state != "Leader" {
 			rf.mu.Unlock()
+			return
 		} else {
 			rf.mu.Lock()
 			timePast := time.Now().UnixNano() - rf.lastHeardTime
@@ -441,10 +442,10 @@ func (rf *Raft) ticker() {
 
 func (rf *Raft) heartbeatTicker() {
 	for rf.killed() == false {
-
 		rf.mu.Lock()
 		if rf.state != "Leader" {
 			rf.mu.Unlock()
+			return
 		} else {
 			rf.mu.Lock()
 			timePast := time.Now().UnixNano() - rf.lastHeartBeatTime
