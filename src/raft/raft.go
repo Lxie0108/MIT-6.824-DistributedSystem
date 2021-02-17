@@ -346,25 +346,25 @@ func (rf *Raft) doElection() {
 	nVotes := 1
 	rf.electionTimer.Reset(rf.getRandomDuration())
 	nMajority := len(rf.peers)/2 + 1
-	args := RequestVoteArgs{
-		Term:        rf.currentTerm,
-		CandidateId: rf.me,
-	}
-
 	for i := 0; i < len(rf.peers); i++ {
 		if i == rf.me {
 			continue
 		}
-		go func(server int) {
+		go func(server int, nVotes *int) {
+
+			args := RequestVoteArgs{
+				Term:        rf.currentTerm,
+				CandidateId: rf.me,
+			}
 
 			reply := RequestVoteReply{}
-			if rf.sendRequestVote(i, &args, &reply) {
+			if rf.sendRequestVote(server, &args, &reply) {
 
 				rf.mu.Lock()
 				defer rf.mu.Unlock()
 				if reply.VoteGranted && rf.state == "Candidate" {
-					nVotes++
-					if nVotes >= nMajority {
+					*nVotes += 1
+					if *nVotes > nMajority {
 						rf.convertTo("Leader")
 					}
 				} else {
@@ -377,7 +377,7 @@ func (rf *Raft) doElection() {
 			} else {
 				DPrintf("Error. Send request failed.")
 			}
-		}(i)
+		}(i, &nVotes)
 	}
 }
 
