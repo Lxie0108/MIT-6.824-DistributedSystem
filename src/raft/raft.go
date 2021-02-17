@@ -352,7 +352,7 @@ func (rf *Raft) doElection() {
 		CandidateId: rf.me,
 	}
 
-	nMajority := len(rf.peers)/2 + 1
+	nMajority := len(rf.peers) / 2
 	for i := 0; i < len(rf.peers); i++ {
 		if i == rf.me {
 			continue
