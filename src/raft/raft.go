@@ -460,14 +460,11 @@ func (rf *Raft) periodicEvent() {
 			rf.mu.Unlock()
 		case <-rf.heartbeatTimer.C:
 			rf.mu.Lock()
-			if rf.state != "Leader" {
-				rf.mu.Unlock()
-				return
-			} else {
+			if rf.state == "Leader" {
 				rf.broadcastHeartbeat()
 				rf.heartbeatTimer.Reset(HeartBeatInterval)
-				rf.mu.Unlock()
 			}
+			rf.mu.Unlock()
 		}
 	}
 }
