@@ -432,7 +432,7 @@ func (rf *Raft) ticker() {
 			rf.mu.Lock()
 			timePast := time.Now().UnixNano() - rf.lastHeardTime
 			if timePast >= int64(ElectionInterval/time.Millisecond) {
-				rf.doElection()
+				rf.convertTo("Candidate") //if followers don't hear from leader, they can become a candidate
 			}
 			rf.mu.Unlock()
 			time.Sleep(time.Millisecond * 10)
@@ -460,7 +460,7 @@ func (rf *Raft) heartbeatTicker() {
 }
 
 func (rf *Raft) periodicEvent() {
-	for {
+	for rf.killed() == false {
 		select {
 		case <-rf.electionTimer.C:
 			rf.mu.Lock()
@@ -480,6 +480,7 @@ func (rf *Raft) periodicEvent() {
 			rf.mu.Unlock()
 		}
 	}
+
 }
 
 //
