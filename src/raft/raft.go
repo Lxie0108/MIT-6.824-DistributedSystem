@@ -390,6 +390,9 @@ send initial empty AppendEntries RPCs
 (heartbeat) to each server; repeat during idle periods to
 prevent election timeouts (§5.2)**/
 func (rf *Raft) broadcastHeartbeat() {
+	if rf.state != "Leader" {
+		return
+	}
 	rf.lastHeartBeatTime = time.Now().UnixNano()
 	args := AppendEntriesArgs{
 		Term:     rf.currentTerm,
@@ -464,19 +467,12 @@ func (rf *Raft) periodicEvent() {
 		select {
 		case <-rf.electionTimer.C:
 			rf.mu.Lock()
-			if rf.state == "Candidate" {
-				rf.doElection()
-			}
-			if rf.state == "Follower" {
-				rf.convertTo("Candidate")
-			}
+			rf.doElection()
 			rf.mu.Unlock()
 		case <-rf.heartbeatTimer.C:
 			rf.mu.Lock()
-			if rf.state == "Leader" {
-				rf.broadcastHeartbeat()
-				rf.heartbeatTimer.Reset(HeartBeatInterval)
-			}
+			rf.broadcastHeartbeat()
+			rf.heartbeatTimer.Reset(HeartBeatInterval)
 			rf.mu.Unlock()
 		}
 	}
