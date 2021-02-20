@@ -163,8 +163,8 @@ func (rf *Raft) Snapshot(index int, snapshot []byte) {
 //
 type RequestVoteArgs struct {
 	// Your data here (2A, 2B).
-	Term        int
-	CandidateId int
+	Term        int //candidate’s term
+	CandidateId int //candidate requesting vote
 }
 
 //
@@ -173,8 +173,8 @@ type RequestVoteArgs struct {
 //
 type RequestVoteReply struct {
 	// Your data here (2A).
-	Term        int
-	VoteGranted bool
+	Term        int  //currentTerm, for candidate to update itself
+	VoteGranted bool //candidate received vote or not
 }
 
 // AppendEntries RPC argument structure
@@ -189,7 +189,7 @@ type AppendEntriesReply struct {
 	Success bool
 }
 
-//AppendEntries RPC, a new gorountie
+//AppendEntries RPC, a new gorountie, protect with mutex
 func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply) {
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
@@ -198,8 +198,7 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 	} else {
 		reply.Success = true
 		rf.currentTerm = args.Term
-		rf.electionTimer.Reset(rf.getRandomDuration())
-		rf.lastHeardTime = time.Now().UnixNano()
+		rf.electionTimer.Reset(rf.getRandomDuration()) //reset after receiving appendentries reply
 		rf.convertTo("Follower")
 	}
 }
@@ -218,8 +217,7 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 		rf.currentTerm = args.Term
 		reply.VoteGranted = true
 		rf.votedFor = args.CandidateId
-		rf.electionTimer.Reset(rf.getRandomDuration())
-		rf.lastHeardTime = time.Now().UnixNano()
+		rf.electionTimer.Reset(rf.getRandomDuration()) //reset after granting vote
 		rf.convertTo("Follower")
 	}
 }
@@ -237,7 +235,7 @@ func (rf *Raft) convertTo(state string) {
 		case "Follower":
 			rf.heartbeatTimer.Stop()
 			rf.electionTimer.Reset(rf.getRandomDuration())
-		case "Candidate":
+		case "Candidate": //On conversion to candidate, start election
 			rf.doElection()
 		case "Leader":
 			rf.electionTimer.Stop()
@@ -362,7 +360,6 @@ func (rf *Raft) doElection() {
 
 			reply := RequestVoteReply{}
 			if rf.sendRequestVote(server, &args, &reply) {
-
 				rf.mu.Lock()
 				defer rf.mu.Unlock()
 				if reply.VoteGranted && rf.state == "Candidate" {
@@ -377,8 +374,6 @@ func (rf *Raft) doElection() {
 						rf.convertTo("Follower")
 					}
 				}
-			} else {
-				DPrintf("Error. Send request failed.")
 			}
 		}(i, &nVotes)
 	}
@@ -392,7 +387,6 @@ func (rf *Raft) broadcastHeartbeat() {
 	if rf.state != "Leader" {
 		return
 	}
-	rf.lastHeartBeatTime = time.Now().UnixNano()
 	args := AppendEntriesArgs{
 		Term:     rf.currentTerm,
 		LeaderId: rf.me,
@@ -411,8 +405,6 @@ func (rf *Raft) broadcastHeartbeat() {
 					rf.convertTo("Follower")
 					return
 				}
-			} else {
-				DPrintf("Error. Send appendEntries failed.")
 			}
 		}(i)
 	}
@@ -430,9 +422,9 @@ func (rf *Raft) ticker() {
 		case <-rf.electionTimer.C:
 			rf.mu.Lock()
 			if rf.state == "Candidate" {
-				rf.doElection()
+				rf.doElection() //If election timeout elapses, candidate starts election
 			}
-			if rf.state == "Follower" {
+			if rf.state == "Follower" { //If election timeout elapses, follower converts to candidate
 				rf.convertTo("Candidate")
 			}
 			rf.mu.Unlock()
