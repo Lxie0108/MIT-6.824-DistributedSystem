@@ -24,7 +24,6 @@ import (
 	"time"
 
 	"6.824/labrpc"
-	//"../labrpc"
 )
 
 const (
@@ -469,5 +468,4 @@ func Make(peers []*labrpc.ClientEnd, me int,
 	go rf.ticker()
 
 	return rf
-
 }
