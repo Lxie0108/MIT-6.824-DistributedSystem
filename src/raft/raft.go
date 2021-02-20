@@ -74,13 +74,11 @@ type Raft struct {
 	// Look at the paper's Figure 2 for a description of what
 	// state a Raft server must maintain.
 
-	currentTerm       int
-	votedFor          int
-	electionTimer     *time.Timer
-	heartbeatTimer    *time.Timer
-	state             string
-	lastHeartBeatTime int64 //the last time when leader sent heartbeat
-	lastHeardTime     int64 //the last time when peer(follower) received heartbeat
+	currentTerm    int
+	votedFor       int
+	electionTimer  *time.Timer
+	heartbeatTimer *time.Timer
+	state          string
 }
 
 // return currentTerm and whether this server
@@ -191,6 +189,7 @@ type AppendEntriesReply struct {
 	Success bool
 }
 
+//AppendEntries RPC, a new gorountie
 func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply) {
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
@@ -427,47 +426,15 @@ func (rf *Raft) ticker() {
 		// Your code here to check if a leader election should
 		// be started and to randomize sleeping time using
 		// time.Sleep().
-		rf.mu.Lock()
-		if rf.state != "Leader" {
-			rf.mu.Unlock()
-			return
-		} else {
-			rf.mu.Lock()
-			timePast := time.Now().UnixNano() - rf.lastHeardTime
-			if timePast >= int64(ElectionInterval/time.Millisecond) {
-				rf.convertTo("Candidate") //if followers don't hear from leader, they can become a candidate
-			}
-			rf.mu.Unlock()
-			time.Sleep(time.Millisecond * 10)
-		}
-	}
-}
-
-func (rf *Raft) heartbeatTicker() {
-	for rf.killed() == false {
-		rf.mu.Lock()
-		if rf.state != "Leader" {
-			rf.mu.Unlock()
-			return
-		} else {
-			rf.mu.Lock()
-			timePast := time.Now().UnixNano() - rf.lastHeartBeatTime
-			if timePast >= int64(HeartBeatInterval/time.Millisecond) {
-				rf.broadcastHeartbeat()
-				rf.heartbeatTimer.Reset(HeartBeatInterval)
-			}
-			rf.mu.Unlock()
-			time.Sleep(time.Millisecond * 10)
-		}
-	}
-}
-
-func (rf *Raft) periodicEvent() {
-	for rf.killed() == false {
 		select {
 		case <-rf.electionTimer.C:
 			rf.mu.Lock()
-			rf.doElection()
+			if rf.state == "Candidate" {
+				rf.doElection()
+			}
+			if rf.state == "Follower" {
+				rf.convertTo("Candidate")
+			}
 			rf.mu.Unlock()
 		case <-rf.heartbeatTimer.C:
 			rf.mu.Lock()
@@ -476,7 +443,6 @@ func (rf *Raft) periodicEvent() {
 			rf.mu.Unlock()
 		}
 	}
-
 }
 
 //
@@ -509,11 +475,6 @@ func Make(peers []*labrpc.ClientEnd, me int,
 
 	// start ticker goroutine to start elections
 	go rf.ticker()
-
-	go rf.heartbeatTicker()
-
-	//kicks off leader elections periodically
-	go rf.periodicEvent()
 
 	return rf
 
