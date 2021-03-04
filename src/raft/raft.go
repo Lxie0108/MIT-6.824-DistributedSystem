@@ -78,6 +78,11 @@ type Raft struct {
 	electionTimer  *time.Timer
 	heartbeatTimer *time.Timer
 	state          string
+	log            []LogEntry
+	commitIndex    int
+	lastApplied    int
+	nextIndex      []int
+	matchIndex     []int
 }
 
 // return currentTerm and whether this server
@@ -162,8 +167,10 @@ func (rf *Raft) Snapshot(index int, snapshot []byte) {
 //
 type RequestVoteArgs struct {
 	// Your data here (2A, 2B).
-	Term        int //candidate’s term
-	CandidateId int //candidate requesting vote
+	Term         int //candidate’s term
+	CandidateId  int //candidate requesting vote
+	LastLogIndex int //index of candidate’s last log entry
+	LastLogTerm  int //term of candidate’s last log entry
 }
 
 //
@@ -178,14 +185,23 @@ type RequestVoteReply struct {
 
 // AppendEntries RPC argument structure
 type AppendEntriesArgs struct {
-	Term     int
-	LeaderId int
+	Term         int
+	LeaderId     int
+	PrevLogIndex int
+	PrevLogTerm  int
+	Entries      []LogEntry
+	LeaderCommit int
 }
 
 // AppendEntries RPC reply structure
 type AppendEntriesReply struct {
 	Term    int
 	Success bool
+}
+
+type LogEntry struct {
+	Command interface{}
+	Term    int
 }
 
 //AppendEntries RPC, a new gorountie, protect with mutex
@@ -467,5 +483,5 @@ func Make(peers []*labrpc.ClientEnd, me int,
 	// start ticker goroutine to start elections
 	go rf.ticker()
 
-	return rf ////
+	return rf
 }
