@@ -476,6 +476,10 @@ func Make(peers []*labrpc.ClientEnd, me int,
 	rf.electionTimer = time.NewTimer(rf.getRandomDuration())
 	rf.heartbeatTimer = time.NewTimer(HeartBeatInterval)
 	rf.state = "Follower"
+	rf.log = make([]LogEntry, 0)
+	rf.log = append(rf.log, LogEntry{
+		Term: 0,
+	})
 
 	// initialize from state persisted before a crash
 	rf.readPersist(persister.ReadRaftState())
