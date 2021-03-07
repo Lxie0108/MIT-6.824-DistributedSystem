@@ -216,6 +216,20 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 		rf.electionTimer.Reset(rf.getRandomDuration()) //reset after receiving appendentries reply
 		rf.convertTo("Follower")
 	}
+	//2B
+	//Reply false if log doesn’t contain an entry at prevLogIndex whose term matches prevLogTerm
+	if len(rf.log) <= args.PrevLogIndex || rf.log[args.PrevLogIndex].Term != args.PrevLogTerm {
+		return
+	}
+	//If an existing entry conflicts with a new one (same index but different terms), delete the existing entry and all that follow it
+	for i := range args.LogEntries {
+		curr := args.PrevLogIndex + 1 + i
+		if rf.log[curr].Term != args.Entries[i].Term {
+			rf.log = rf.log[:currIndex]
+			break
+		}
+
+
 }
 
 //
@@ -332,7 +346,6 @@ func (rf *Raft) Start(command interface{}) (int, int, bool) {
 			Term:    rf.currentTerm,
 			Command: command,
 		})
-
 	}
 	return index, term, isLeader
 }
