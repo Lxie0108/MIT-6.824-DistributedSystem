@@ -222,13 +222,24 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 		return
 	}
 	//If an existing entry conflicts with a new one (same index but different terms), delete the existing entry and all that follow it
-	for i := range args.LogEntries {
+	for i := range args.Entries {
 		curr := args.PrevLogIndex + 1 + i
 		if rf.log[curr].Term != args.Entries[i].Term {
-			rf.log = rf.log[:currIndex]
+			rf.log = rf.log[:curr]
 			break
 		}
+		//Append any new entries not already in the log
+		rf.log = append(rf.log, args.Entries[i])
+	}
 
+	//If leaderCommit > commitIndex, set commitIndex = min(leaderCommit, index of last new entry)
+	if args.LeaderCommit > rf.commitIndex {
+		if args.LeaderCommit <= len(rf.log)-1 {
+			rf.commitIndex = args.LeaderCommit
+		} else {
+			rf.commitIndex = len(rf.log) - 1
+		}
+	}
 
 }
 
