@@ -83,6 +83,7 @@ type Raft struct {
 	lastApplied    int
 	nextIndex      []int
 	matchIndex     []int
+	applyCh        chan ApplyMsg
 }
 
 // return currentTerm and whether this server
@@ -239,8 +240,9 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 		} else {
 			rf.commitIndex = len(rf.log) - 1
 		}
+		rf.applyCommit()
 	}
-
+	reply.Success = true
 }
 
 //
@@ -460,6 +462,11 @@ func (rf *Raft) broadcastHeartbeat() {
 	}
 }
 
+//Apply the commited LogEntry. Use applyCh to send ApplyMsg.
+func (rf *Raft) applyCommit() {
+
+}
+
 // The ticker go routine starts a new election if this peer hasn't received
 // heartsbeats recently.
 func (rf *Raft) ticker() {
@@ -515,6 +522,7 @@ func Make(peers []*labrpc.ClientEnd, me int,
 	rf.log = append(rf.log, LogEntry{
 		Term: 0,
 	})
+	rf.applyCh = applyCh
 
 	// initialize from state persisted before a crash
 	rf.readPersist(persister.ReadRaftState())
