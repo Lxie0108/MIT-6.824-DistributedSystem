@@ -467,9 +467,14 @@ func (rf *Raft) broadcastHeartbeat() {
 func (rf *Raft) applyCommited() {
 	//If commitIndex > lastApplied: increment lastApplied, apply log[lastApplied] to state machine (§5.3)
 	if rf.commitIndex > rf.lastApplied {
-
+		rf.lastApplied++
+		msg := ApplyMsg{
+			CommandValid: true,
+			Command:      rf.log[rf.lastApplied].Command,
+			CommandIndex: rf.lastApplied,
+		}
+		rf.applyCh <- msg
 	}
-
 }
 
 // The ticker go routine starts a new election if this peer hasn't received
