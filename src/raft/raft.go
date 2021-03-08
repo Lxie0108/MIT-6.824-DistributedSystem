@@ -240,7 +240,7 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 		} else {
 			rf.commitIndex = len(rf.log) - 1
 		}
-		rf.applyCommit()
+		rf.applyCommited()
 	}
 	reply.Success = true
 
@@ -464,7 +464,11 @@ func (rf *Raft) broadcastHeartbeat() {
 }
 
 //Apply the commited LogEntry. Use applyCh to send ApplyMsg.
-func (rf *Raft) applyCommit() {
+func (rf *Raft) applyCommited() {
+	//If commitIndex > lastApplied: increment lastApplied, apply log[lastApplied] to state machine (§5.3)
+	if rf.commitIndex > rf.lastApplied {
+
+	}
 
 }
 
