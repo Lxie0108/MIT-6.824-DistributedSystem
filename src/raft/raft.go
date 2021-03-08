@@ -243,6 +243,7 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 		rf.applyCommit()
 	}
 	reply.Success = true
+
 }
 
 //
