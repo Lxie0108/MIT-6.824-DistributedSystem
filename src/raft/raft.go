@@ -406,8 +406,10 @@ func (rf *Raft) doElection() {
 	nVotes := 1
 	rf.electionTimer.Reset(rf.getRandomDuration())
 	args := RequestVoteArgs{
-		Term:        rf.currentTerm,
-		CandidateId: rf.me,
+		Term:         rf.currentTerm,
+		CandidateId:  rf.me,
+		LastLogIndex: len(rf.log) - 1,
+		LastLogTerm:  rf.log[len(rf.log)-1].Term,
 	}
 	nMajority := len(rf.peers) / 2
 	for i := 0; i < len(rf.peers); i++ {
@@ -566,9 +568,12 @@ func Make(peers []*labrpc.ClientEnd, me int,
 	rf.heartbeatTimer = time.NewTimer(HeartBeatInterval)
 	rf.state = "Follower"
 	rf.log = make([]LogEntry, 0)
-	rf.log = append(rf.log, LogEntry{
-		Term: 0,
-	})
+	rf.nextIndex = make([]int, len(rf.peers))
+	for i := range rf.nextIndex {
+		rf.nextIndex[i] = len(rf.log)
+	}
+	rf.matchIndex = make([]int, len(rf.peers))
+
 	rf.applyCh = applyCh
 
 	// initialize from state persisted before a crash
