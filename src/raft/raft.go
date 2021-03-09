@@ -256,12 +256,17 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 	if args.Term < rf.currentTerm {
 		reply.Term = rf.currentTerm
 		reply.VoteGranted = false
-	} else {
+		return
+	}
+	if args.Term > rf.currentTerm {
 		rf.currentTerm = args.Term
+		rf.convertTo("Follower")
+	}
+	//If votedFor is null or candidateId, and candidate’s log is at least as up-to-date as receiver’s log, grant vote
+	if (rf.votedFor == -1 || rf.votedFor == args.CandidateId) && (args.LastLogTerm > rf.log[len(rf.log)-1].Term || (args.LastLogTerm == rf.log[len(rf.log)-1].Term && args.LastLogIndex >= len(rf.log)-1)) {
 		reply.VoteGranted = true
 		rf.votedFor = args.CandidateId
-		rf.electionTimer.Reset(rf.getRandomDuration()) //reset after granting vote
-		rf.convertTo("Follower")
+		rf.electionTimer.Reset(rf.getRandomDuration())
 	}
 }
 
