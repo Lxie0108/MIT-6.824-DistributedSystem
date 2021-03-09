@@ -460,6 +460,23 @@ func (rf *Raft) broadcastHeartbeat() {
 				rf.mu.Lock()
 				defer rf.mu.Unlock()
 				if reply.Success {
+					//update nextIndex and matchIndex for follower
+					rf.nextIndex[server] = args.PrevLogIndex + len(args.Entries) + 1
+					rf.matchIndex[server] = args.PrevLogIndex + len(args.Entries)
+
+					//If there exists an N such that N > commitIndex, a majority of matchIndex[i] ≥ N, and log[N].term == currentTerm: set commitIndex = N
+					for N := len(rf.log) - 1; N > rf.commitIndex; N-- {
+						count := 0
+						for _, matchIndex := range rf.matchIndex {
+							if matchIndex >= N {
+								count++
+							}
+						}
+						if count > len(rf.peers)/2 && rf.log[N].Term == rf.currentTerm {
+							rf.commitIndex = N
+							rf.applyCommitted()
+						}
+					}
 
 				} else { //unsuccessful reply can be caused by 1. rf.currentTerm < reply.Term (2A)
 					//and 2. If AppendEntries fails because of log inconsistency (2B), in this case, decrement nextIndex and retry
