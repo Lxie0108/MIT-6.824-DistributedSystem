@@ -440,15 +440,21 @@ func (rf *Raft) broadcastHeartbeat() {
 	if rf.state != "Leader" {
 		return
 	}
-	args := AppendEntriesArgs{
-		Term:     rf.currentTerm,
-		LeaderId: rf.me,
-	}
 	for i := 0; i < len(rf.peers); i++ {
 		if i == rf.me {
 			continue
 		}
 		go func(server int) {
+			prev := rf.nextIndex[server] - 1 // PreviousLogIndex should be index of log entry immediately preceding new ones.
+			//It should be the last index that Follower has been update-to-date with the leader, therefore, it is nextIndex[Follower] - 1.
+			args := AppendEntriesArgs{
+				Term:         rf.currentTerm,
+				LeaderId:     rf.me,
+				PrevLogIndex: prev,
+				PrevLogTerm:  rf.log[prev].Term,
+				Entries:      rf.log[rf.nextIndex[server]:],
+				LeaderCommit: rf.commitIndex,
+			}
 			reply := AppendEntriesReply{}
 			if rf.sendAppendEntries(server, &args, &reply) {
 				rf.mu.Lock()
