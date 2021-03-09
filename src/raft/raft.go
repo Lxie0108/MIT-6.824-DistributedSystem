@@ -459,10 +459,17 @@ func (rf *Raft) broadcastHeartbeat() {
 			if rf.sendAppendEntries(server, &args, &reply) {
 				rf.mu.Lock()
 				defer rf.mu.Unlock()
-				if rf.currentTerm < reply.Term { //revert to Follower
-					rf.currentTerm = reply.Term
-					rf.convertTo("Follower")
-					return
+				if reply.Success {
+
+				} else { //unsuccessful reply can be caused by 1. rf.currentTerm < reply.Term (2A)
+					//and 2. If AppendEntries fails because of log inconsistency (2B), in this case, decrement nextIndex and retry
+					if rf.currentTerm < reply.Term { //revert to Follower
+						rf.currentTerm = reply.Term
+						rf.convertTo("Follower")
+						return
+					} else {
+						rf.nextIndex[server]--
+					}
 				}
 			}
 		}(i)
