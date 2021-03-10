@@ -298,6 +298,7 @@ func (rf *Raft) convertTo(state string) {
 		case "Follower":
 			rf.heartbeatTimer.Stop()
 			rf.electionTimer.Reset(rf.getRandomDuration())
+			rf.votedFor = -1
 		case "Candidate": //On conversion to candidate, start election
 			rf.doElection()
 		case "Leader":
