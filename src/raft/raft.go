@@ -211,12 +211,17 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 	defer rf.mu.Unlock()
 	if args.Term < rf.currentTerm { //Reply false if term < currentTerm (§5.1)
 		reply.Success = false
-	} else {
+		return
+	}
+
+	if args.Term > rf.currentTerm {
 		reply.Success = true
 		rf.currentTerm = args.Term
-		rf.electionTimer.Reset(rf.getRandomDuration()) //reset after receiving appendentries reply
 		rf.convertTo("Follower")
 	}
+
+	rf.electionTimer.Reset(rf.getRandomDuration())
+
 	//2B
 	//Reply false if log doesn’t contain an entry at prevLogIndex whose term matches prevLogTerm
 	if len(rf.log) <= args.PrevLogIndex || rf.log[args.PrevLogIndex].Term != args.PrevLogTerm {
@@ -225,11 +230,17 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 	//If an existing entry conflicts with a new one (same index but different terms), delete the existing entry and all that follow it
 	for i := range args.Entries {
 		curr := args.PrevLogIndex + 1 + i
+		if curr >= len(rf.log) { // index out of range
+			break
+		}
 		if rf.log[curr].Term != args.Entries[i].Term {
 			rf.log = rf.log[:curr]
 			break
 		}
-		//Append any new entries not already in the log
+	}
+
+	//Append any new entries not already in the log
+	for i := range args.Entries {
 		rf.log = append(rf.log, args.Entries[i])
 	}
 
