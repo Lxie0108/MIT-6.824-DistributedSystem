@@ -374,12 +374,15 @@ func (rf *Raft) Start(command interface{}) (int, int, bool) {
 	if rf.state != "Leader" {
 		isLeader = false
 	} else {
+		rf.mu.Lock()
 		isLeader = true
 		index = len(rf.log)
+		rf.nextIndex[rf.me] = 2
 		rf.log = append(rf.log, LogEntry{
 			Term:    rf.currentTerm,
 			Command: command,
 		})
+		rf.mu.Unlock()
 	}
 	return index, term, isLeader
 }
@@ -518,16 +521,18 @@ func (rf *Raft) broadcastHeartbeat() {
 //Apply the commited LogEntry. Use applyCh to send ApplyMsg.
 func (rf *Raft) applyCommitted() {
 	//If commitIndex > lastApplied: increment lastApplied, apply log[lastApplied] to state machine (§5.3)
-	for {
-		if rf.commitIndex > rf.lastApplied {
-			rf.lastApplied++
-			msg := ApplyMsg{
-				CommandValid: true,
-				Command:      rf.log[rf.lastApplied].Command,
-				CommandIndex: rf.lastApplied,
+	if rf.commitIndex > rf.lastApplied {
+		go func(start int, Logentry []LogEntry) {
+			for i, entry := range Logentry {
+				msg := ApplyMsg{
+					CommandValid: true,
+					Command:      entry.Command,
+					CommandIndex: i + start,
+				}
+				rf.applyCh <- msg
+				rf.lastApplied = msg.CommandIndex
 			}
-			rf.applyCh <- msg
-		}
+		}(rf.lastApplied+1, rf.log[rf.lastApplied+1:rf.commitIndex+1])
 	}
 }
 
