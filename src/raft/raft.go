@@ -256,18 +256,26 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 	if args.Term < rf.currentTerm {
 		reply.Term = rf.currentTerm
 		reply.VoteGranted = false
-		return
-	}
-	if args.Term > rf.currentTerm {
+	} else {
 		rf.currentTerm = args.Term
-		rf.convertTo("Follower")
-	}
-	//If votedFor is null or candidateId, and candidate’s log is at least as up-to-date as receiver’s log, grant vote
-	if (rf.votedFor == -1 || rf.votedFor == args.CandidateId) && (args.LastLogTerm > rf.log[len(rf.log)-1].Term || (args.LastLogTerm == rf.log[len(rf.log)-1].Term && args.LastLogIndex >= len(rf.log)-1)) {
 		reply.VoteGranted = true
 		rf.votedFor = args.CandidateId
-		rf.electionTimer.Reset(rf.getRandomDuration())
+		rf.electionTimer.Reset(rf.getRandomDuration()) //reset after granting vote
+		rf.convertTo("Follower")
 	}
+
+	lastLogIndex := len(rf.log) - 1
+	if args.LastLogTerm < rf.log[lastLogIndex].Term ||
+		(args.LastLogTerm == rf.log[lastLogIndex].Term && args.LastLogIndex < lastLogIndex) {
+		reply.Term = rf.currentTerm
+		reply.VoteGranted = false
+		return
+	}
+	rf.votedFor = args.CandidateId
+	reply.Term = rf.currentTerm // not used, for better logging
+	reply.VoteGranted = true
+	// reset timer after grant vote
+	rf.electionTimer.Reset(rf.getRandomDuration())
 }
 
 func (rf *Raft) getRandomDuration() time.Duration {
@@ -406,10 +414,8 @@ func (rf *Raft) doElection() {
 	nVotes := 1
 	rf.electionTimer.Reset(rf.getRandomDuration())
 	args := RequestVoteArgs{
-		Term:         rf.currentTerm,
-		CandidateId:  rf.me,
-		LastLogIndex: len(rf.log) - 1,
-		LastLogTerm:  rf.log[len(rf.log)-1].Term,
+		Term:        rf.currentTerm,
+		CandidateId: rf.me,
 	}
 	nMajority := len(rf.peers) / 2
 	for i := 0; i < len(rf.peers); i++ {
@@ -568,12 +574,9 @@ func Make(peers []*labrpc.ClientEnd, me int,
 	rf.heartbeatTimer = time.NewTimer(HeartBeatInterval)
 	rf.state = "Follower"
 	rf.log = make([]LogEntry, 0)
-	rf.nextIndex = make([]int, len(rf.peers))
-	for i := range rf.nextIndex {
-		rf.nextIndex[i] = len(rf.log)
-	}
-	rf.matchIndex = make([]int, len(rf.peers))
-
+	rf.log = append(rf.log, LogEntry{
+		Term: 0,
+	})
 	rf.applyCh = applyCh
 
 	// initialize from state persisted before a crash
