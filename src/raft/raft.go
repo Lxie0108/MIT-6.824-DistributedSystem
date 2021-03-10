@@ -588,7 +588,8 @@ func Make(peers []*labrpc.ClientEnd, me int,
 		rf.nextIndex[i] = len(rf.log)
 	}
 	rf.matchIndex = make([]int, len(rf.peers))
-
+	rf.commitIndex = -1
+	rf.lastApplied = -1
 	rf.applyCh = applyCh
 
 	// initialize from state persisted before a crash
