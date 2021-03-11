@@ -254,6 +254,7 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 		rf.applyCommitted()
 	}
 	reply.Success = true
+
 }
 
 //
@@ -264,10 +265,7 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
 
-	reply.Term = rf.currentTerm
-	reply.VoteGranted = false
-
-	if args.Term < rf.currentTerm {
+	if args.Term < rf.currentTerm || (args.Term == rf.currentTerm && rf.votedFor != -1 && rf.votedFor != args.CandidateId) {
 		reply.Term = rf.currentTerm
 		reply.VoteGranted = false
 		return
@@ -281,6 +279,10 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 		reply.VoteGranted = true
 		rf.votedFor = args.CandidateId
 		rf.electionTimer.Reset(rf.getRandomDuration())
+	} else {
+		reply.Term = rf.currentTerm
+		reply.VoteGranted = false
+		return
 	}
 }
 
