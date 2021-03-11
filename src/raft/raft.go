@@ -275,15 +275,14 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 		rf.convertTo("Follower")
 	}
 	//If votedFor is null or candidateId, and candidate’s log is at least as up-to-date as receiver’s log, grant vote
-	if (rf.votedFor == -1 || rf.votedFor == args.CandidateId) && (args.LastLogTerm > rf.log[len(rf.log)-1].Term || (args.LastLogTerm == rf.log[len(rf.log)-1].Term && args.LastLogIndex >= len(rf.log)-1)) {
-		reply.VoteGranted = true
-		rf.votedFor = args.CandidateId
-		rf.electionTimer.Reset(rf.getRandomDuration())
-	} else {
+	if (rf.votedFor != -1 || rf.votedFor != args.CandidateId) && (args.LastLogTerm < rf.log[len(rf.log)-1].Term || (args.LastLogTerm == rf.log[len(rf.log)-1].Term && args.LastLogIndex < len(rf.log)-1)) {
 		reply.Term = rf.currentTerm
 		reply.VoteGranted = false
 		return
 	}
+	reply.VoteGranted = true
+	rf.votedFor = args.CandidateId
+	rf.electionTimer.Reset(rf.getRandomDuration())
 }
 
 func (rf *Raft) getRandomDuration() time.Duration {
