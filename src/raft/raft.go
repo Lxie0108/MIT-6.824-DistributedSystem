@@ -280,8 +280,8 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 		reply.VoteGranted = false
 		return
 	}
-	reply.VoteGranted = true
 	rf.votedFor = args.CandidateId
+	reply.VoteGranted = true
 	rf.electionTimer.Reset(rf.getRandomDuration())
 }
 
@@ -375,14 +375,14 @@ func (rf *Raft) sendAppendEntries(server int, args *AppendEntriesArgs, reply *Ap
 func (rf *Raft) Start(command interface{}) (int, int, bool) {
 	index := -1
 	term := -1
-	isLeader := true
+	isLeader := false
+
+	rf.mu.Lock()
+	defer rf.mu.Unlock()
 
 	// Your code here (2B).
 	term = rf.currentTerm
-	if rf.state != "Leader" {
-		isLeader = false
-	} else {
-		rf.mu.Lock()
+	if rf.state == "Leader" {
 		isLeader = true
 		index = len(rf.log)
 		rf.nextIndex[rf.me] = index + 1
@@ -391,7 +391,6 @@ func (rf *Raft) Start(command interface{}) (int, int, bool) {
 			Term:    rf.currentTerm,
 			Command: command,
 		})
-		rf.mu.Unlock()
 	}
 	return index, term, isLeader
 }
@@ -549,7 +548,9 @@ func (rf *Raft) applyCommitted() {
 					CommandIndex: i + start,
 				}
 				rf.applyCh <- msg
+				rf.mu.Lock()
 				rf.lastApplied = msg.CommandIndex
+				rf.mu.Unlock()
 			}
 		}(rf.lastApplied+1, rf.log[rf.lastApplied+1:rf.commitIndex+1])
 	}
