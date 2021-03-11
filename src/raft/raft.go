@@ -481,12 +481,22 @@ func (rf *Raft) broadcastHeartbeat() {
 			rf.mu.Lock()
 			prev := rf.nextIndex[server] - 1 // PreviousLogIndex should be index of log entry immediately preceding new ones.
 			//It should be the last index that Follower has been update-to-date with the leader, therefore, it is nextIndex[Follower] - 1.
+			var idx int
+			if rf.nextIndex[server] == -1 {
+				idx = 0
+			} else {
+				idx = rf.nextIndex[server]
+			}
+			entries := rf.log[idx:]
+			if prev == -1 {
+				prev = 0
+			}
 			args := AppendEntriesArgs{
 				Term:         rf.currentTerm,
 				LeaderId:     rf.me,
 				PrevLogIndex: prev,
 				PrevLogTerm:  rf.log[prev].Term,
-				Entries:      rf.log[rf.nextIndex[server]:],
+				Entries:      entries,
 				LeaderCommit: rf.commitIndex,
 			}
 			rf.mu.Unlock()
@@ -518,7 +528,6 @@ func (rf *Raft) broadcastHeartbeat() {
 					if rf.currentTerm < reply.Term { //revert to Follower
 						rf.currentTerm = reply.Term
 						rf.convertTo("Follower")
-						return
 					} else {
 						rf.nextIndex[server]--
 					}
