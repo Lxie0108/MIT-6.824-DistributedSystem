@@ -482,13 +482,13 @@ func (rf *Raft) broadcastHeartbeat() {
 			prev := rf.nextIndex[server] - 1 // PreviousLogIndex should be index of log entry immediately preceding new ones.
 			//It should be the last index that Follower has been update-to-date with the leader, therefore, it is nextIndex[Follower] - 1.
 			var idx int
-			if rf.nextIndex[server] == -1 {
+			if rf.nextIndex[server] < 0 {
 				idx = 0
 			} else {
 				idx = rf.nextIndex[server]
 			}
 			entries := rf.log[idx:]
-			if prev == -1 {
+			if prev < 0 {
 				prev = 0
 			}
 			args := AppendEntriesArgs{
