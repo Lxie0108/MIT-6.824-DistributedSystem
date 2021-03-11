@@ -298,10 +298,17 @@ func (rf *Raft) convertTo(state string) {
 		case "Follower":
 			rf.heartbeatTimer.Stop()
 			rf.electionTimer.Reset(rf.getRandomDuration())
-			rf.votedFor = -1
+			rf.votedFor = -1 // reset
 		case "Candidate": //On conversion to candidate, start election
 			rf.doElection()
 		case "Leader":
+			//initialize nextIndex and matchIndex
+			for i := range rf.nextIndex {
+				rf.nextIndex[i] = len(rf.log)
+			}
+			for i := range rf.matchIndex {
+				rf.matchIndex[i] = 0
+			}
 			rf.electionTimer.Stop()
 			rf.broadcastHeartbeat()
 			rf.heartbeatTimer.Reset(HeartBeatInterval)
@@ -378,7 +385,8 @@ func (rf *Raft) Start(command interface{}) (int, int, bool) {
 		rf.mu.Lock()
 		isLeader = true
 		index = len(rf.log)
-		rf.nextIndex[rf.me] = 2
+		rf.nextIndex[rf.me] = index + 1
+		rf.matchIndex[rf.me] = index
 		rf.log = append(rf.log, LogEntry{
 			Term:    rf.currentTerm,
 			Command: command,
@@ -449,7 +457,6 @@ func (rf *Raft) doElection() {
 				} else {
 					if rf.currentTerm < reply.Term { //revert to Follower
 						rf.currentTerm = args.Term
-						rf.votedFor = -1
 						rf.convertTo("Follower")
 					}
 				}
@@ -471,6 +478,7 @@ func (rf *Raft) broadcastHeartbeat() {
 			continue
 		}
 		go func(server int) {
+			rf.mu.Lock()
 			prev := rf.nextIndex[server] - 1 // PreviousLogIndex should be index of log entry immediately preceding new ones.
 			//It should be the last index that Follower has been update-to-date with the leader, therefore, it is nextIndex[Follower] - 1.
 			args := AppendEntriesArgs{
@@ -481,6 +489,7 @@ func (rf *Raft) broadcastHeartbeat() {
 				Entries:      rf.log[rf.nextIndex[server]:],
 				LeaderCommit: rf.commitIndex,
 			}
+			rf.mu.Unlock()
 			reply := AppendEntriesReply{}
 			if rf.sendAppendEntries(server, &args, &reply) {
 				rf.mu.Lock()
