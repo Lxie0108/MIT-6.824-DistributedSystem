@@ -27,10 +27,10 @@ import (
 )
 
 const (
-	HeartBeatInterval  = 150 * time.Millisecond
-	ElectionInterval   = 300 * time.Millisecond
-	ElectionTimeoutMin = 500
-	ElectionTimeoutMax = 800
+	HeartBeatInterval  = 100 * time.Millisecond
+	ElectionInterval   = 150 * time.Millisecond
+	ElectionTimeoutMin = 400
+	ElectionTimeoutMax = 550
 )
 
 // import "bytes"
