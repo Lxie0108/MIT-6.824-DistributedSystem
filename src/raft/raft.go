@@ -220,6 +220,9 @@ type AppendEntriesArgs struct {
 type AppendEntriesReply struct {
 	Term    int
 	Success bool
+	ConflictIndex int
+	ConflictTerm int
+	ConflictLen int
 }
 
 type LogEntry struct {
