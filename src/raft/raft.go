@@ -147,6 +147,20 @@ func (rf *Raft) readPersist(data []byte) {
 	//   rf.xxx = xxx
 	//   rf.yyy = yyy
 	// }
+	r := bytes.NewBuffer(data)
+	d := labgob.NewDecoder(r)
+	var currentTerm int
+	var votedFor int
+	var log []LogEntry
+	if d.Decode(&currentTerm) != nil || d. Decode(&votedFor) != nil ||
+	   d.Decode(&log) != nil {
+	   //error...
+	   DPrintf("%v fails to read persist states", rf)
+	} else {
+	   rf.currentTerm = currentTerm
+	   rf.votedFor = votedFor
+	   rf.log = log
+	}
 }
 
 //
