@@ -239,6 +239,7 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 	if args.Term > rf.currentTerm {
 		reply.Success = true
 		rf.currentTerm = args.Term
+		rf.persist()
 		rf.convertTo("Follower")
 	}
 
@@ -265,6 +266,7 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 	for i := range args.Entries {
 		rf.log = append(rf.log, args.Entries[i])
 	}
+	rf.persist()
 
 	//If leaderCommit > commitIndex, set commitIndex = min(leaderCommit, index of last new entry)
 	if args.LeaderCommit > rf.commitIndex {
@@ -294,6 +296,7 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 	if args.Term > rf.currentTerm {
 		rf.currentTerm = args.Term
 		rf.convertTo("Follower")
+		rf.persist()
 	}
 	//If votedFor is null or candidateId, and candidate’s log is at least as up-to-date as receiver’s log, grant vote
 	if (rf.votedFor != -1 || rf.votedFor != args.CandidateId) && (args.LastLogTerm < rf.log[len(rf.log)-1].Term || (args.LastLogTerm == rf.log[len(rf.log)-1].Term && args.LastLogIndex < len(rf.log)-1)) {
@@ -303,6 +306,7 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 	}
 	rf.votedFor = args.CandidateId
 	reply.VoteGranted = true
+	rf.persist()
 	rf.electionTimer.Reset(rf.getRandomDuration())
 }
 
@@ -412,6 +416,7 @@ func (rf *Raft) Start(command interface{}) (int, int, bool) {
 			Term:    rf.currentTerm,
 			Command: command,
 		})
+		rf.persist()
 	}
 	return index, term, isLeader
 }
@@ -450,6 +455,7 @@ follower
 func (rf *Raft) doElection() {
 	rf.currentTerm++
 	rf.votedFor = rf.me
+	rf.persist()
 	nVotes := 1
 	rf.electionTimer.Reset(rf.getRandomDuration())
 	args := RequestVoteArgs{
@@ -478,6 +484,7 @@ func (rf *Raft) doElection() {
 					if rf.currentTerm < reply.Term { //revert to Follower
 						rf.currentTerm = args.Term
 						rf.convertTo("Follower")
+						rf.persist()
 					}
 				}
 			}
@@ -548,6 +555,7 @@ func (rf *Raft) broadcastHeartbeat() {
 					if rf.currentTerm < reply.Term { //revert to Follower
 						rf.currentTerm = reply.Term
 						rf.convertTo("Follower")
+						rf.persist()
 					} else {
 						rf.nextIndex[server]--
 					}
