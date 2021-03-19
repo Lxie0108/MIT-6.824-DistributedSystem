@@ -222,7 +222,6 @@ type AppendEntriesReply struct {
 	Success bool
 	ConflictIndex int
 	ConflictTerm int
-	ConflictLen int
 }
 
 type LogEntry struct {
@@ -251,7 +250,24 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 	//2B
 	//Reply false if log doesn’t contain an entry at prevLogIndex whose term matches prevLogTerm
 	if len(rf.log) <= args.PrevLogIndex || rf.log[args.PrevLogIndex].Term != args.PrevLogTerm {
-		return
+		if len(rf.log) <= args.PrevLogIndex {
+			//no conflict
+			reply.Success = false
+			reply.ConflictIndex = len(rf.log)
+			reply.ConflictTerm = -1
+			return
+		} else {
+			reply.Success = false
+			reply.ConflictTerm = rf.log[args.PrevLogIndex].Term // it unmatches leader's term
+			for i := args.PrevLogIndex; i > 0; i-- { //starts at PrevLogIndex and searches back
+				if rf.log[i].Term == rf.log[args.PrevLogIndex].Term {
+					reply.ConflictIndex = i
+				} else {
+					break
+				}
+			}
+			reply.ConflictIndex -= 1
+		}
 	}
 	//If an existing entry conflicts with a new one (same index but different terms), delete the existing entry and all that follow it
 	for i := range args.Entries {
@@ -560,7 +576,16 @@ func (rf *Raft) broadcastHeartbeat() {
 						rf.convertTo("Follower")
 						rf.persist()
 					} else {
-						rf.nextIndex[server]--
+						//rf.nextIndex[server]--
+						rf.nextIndex[server] = reply.ConflictIndex
+						if reply.ConflictTerm != -1 {
+							for i := args.PrevLogIndex; i > 0; i-- {
+								if rf.log[i-1].Term == reply.ConflictTerm {
+									rf.nextIndex[server] = i
+									break
+								}
+							}
+						}
 					}
 				}
 			}
