@@ -235,6 +235,7 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 	defer rf.mu.Unlock()
 	if args.Term < rf.currentTerm { //Reply false if term < currentTerm (§5.1)
 		reply.Success = false
+		reply.Term = rf.currentTerm
 		return
 	}
 
@@ -253,11 +254,12 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 		if len(rf.log) <= args.PrevLogIndex {
 			//no conflict
 			reply.Success = false
+			reply.Term = rf.currentTerm
 			reply.ConflictIndex = len(rf.log)
-			reply.ConflictTerm = -1
-			return
-		} else {
+			reply.ConflictTerm = -1			
+		} else if rf.log[args.PrevLogIndex].Term != args.PrevLogTerm {
 			reply.Success = false
+			reply.Term = rf.currentTerm
 			reply.ConflictTerm = rf.log[args.PrevLogIndex].Term // it unmatches leader's term
 			for i := args.PrevLogIndex; i > 0; i-- { //starts at PrevLogIndex and searches back
 				if rf.log[i].Term == rf.log[args.PrevLogIndex].Term {
@@ -266,8 +268,8 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 					break
 				}
 			}
-			reply.ConflictIndex -= 1
 		}
+		return
 	}
 	//If an existing entry conflicts with a new one (same index but different terms), delete the existing entry and all that follow it
 	for i := range args.Entries {
