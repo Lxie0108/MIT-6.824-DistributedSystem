@@ -158,6 +158,8 @@ func (rf *Raft) readPersist(data []byte) {
 	   //error...
 	   DPrintf("%v fails to read persist states", rf)
 	} else {
+		rf.mu.Lock()
+		defer rf.mu.Unlock()
 	   rf.currentTerm = currentTerm
 	   rf.votedFor = votedFor
 	   rf.log = log
@@ -347,6 +349,7 @@ func (rf *Raft) convertTo(state string) {
 			rf.heartbeatTimer.Stop()
 			rf.electionTimer.Reset(rf.getRandomDuration())
 			rf.votedFor = -1 // reset
+			rf.persist()
 		case "Candidate": //On conversion to candidate, start election
 			rf.doElection()
 		case "Leader":
