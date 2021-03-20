@@ -251,13 +251,14 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 	//2B
 	//Reply false if log doesn’t contain an entry at prevLogIndex whose term matches prevLogTerm
 	if len(rf.log) <= args.PrevLogIndex || rf.log[args.PrevLogIndex].Term != args.PrevLogTerm {
-		if len(rf.log) <= args.PrevLogIndex {
-			//no conflict
+		if len(rf.log) <= args.PrevLogIndex { //If a follower does not have prevLogIndex in its log, it should return with conflictIndex = len(log) and conflictTerm = None.
 			reply.Success = false
 			reply.Term = rf.currentTerm
 			reply.ConflictIndex = len(rf.log)
 			reply.ConflictTerm = -1			
 		} else if rf.log[args.PrevLogIndex].Term != args.PrevLogTerm {
+		//If a follower does have prevLogIndex in its log, but the term does not match, it should return conflictTerm = log[prevLogIndex].Term, 
+		//and then search its log for the first index whose entry has term equal to conflictTerm.
 			reply.Success = false
 			reply.Term = rf.currentTerm
 			reply.ConflictTerm = rf.log[args.PrevLogIndex].Term // it unmatches leader's term
@@ -267,10 +268,11 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 				} else {
 					break
 				}
-			}
+			}	
 		}
 		return
 	}
+
 	//If an existing entry conflicts with a new one (same index but different terms), delete the existing entry and all that follow it
 	for i := range args.Entries {
 		curr := args.PrevLogIndex + 1 + i
@@ -578,15 +580,17 @@ func (rf *Raft) broadcastHeartbeat() {
 						rf.convertTo("Follower")
 						rf.persist()
 					} else {
-						//rf.nextIndex[server]--
+						//Upon receiving a conflict response, the leader should first search its log for conflictTerm. 
+						//If it finds an entry in its log with that term, it should set nextIndex to be the one beyond the index of the last entry in that term in its log.
+						//If it does not find an entry with that term, it should set nextIndex = conflictIndex.
 						rf.nextIndex[server] = reply.ConflictIndex
 						if reply.ConflictTerm != -1 {
 							for i := args.PrevLogIndex; i > 0; i-- {
-								if rf.log[i-1].Term == reply.ConflictTerm {
-									rf.nextIndex[server] = i
+								if rf.log[i].Term == reply.ConflictTerm {
+									rf.nextIndex[server] = i + 1	
 									break
 								}
-							}
+							}		
 						}
 					}
 				}
