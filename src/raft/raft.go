@@ -535,17 +535,9 @@ func (rf *Raft) broadcastHeartbeat() {
 		go func(server int) {
 			rf.mu.Lock()
 			prev := rf.nextIndex[server] - 1 // PreviousLogIndex should be index of log entry immediately preceding new ones.
-			//It should be the last index that Follower has been update-to-date with the leader, therefore, it is nextIndex[Follower] - 1.
-			var idx int
-			if rf.nextIndex[server] < 0 {
-				idx = 0
-			} else {
-				idx = rf.nextIndex[server]
-			}
-			entries := rf.log[idx:]
-			if prev < 0 {
-				prev = 0
-			}
+			//It should be the last index that Follower has been update-to-date with the leader, therefore, it is nextIndex[Follower] - 1.		
+			entries := make([]LogEntry, len(rf.log[prev+1:]))
+			copy(entries, rf.log[prev+1:])
 			args := AppendEntriesArgs{
 				Term:         rf.currentTerm,
 				LeaderId:     rf.me,
@@ -591,8 +583,8 @@ func (rf *Raft) broadcastHeartbeat() {
 						rf.nextIndex[server] = reply.ConflictIndex
 						if reply.ConflictTerm != -1 {
 							for i := args.PrevLogIndex; i > 0; i-- {
-								if rf.log[i].Term == reply.ConflictTerm {
-									rf.nextIndex[server] = i + 1	
+								if rf.log[i-1].Term == reply.ConflictTerm {
+									rf.nextIndex[server] = i	
 									break
 								}
 							}		
