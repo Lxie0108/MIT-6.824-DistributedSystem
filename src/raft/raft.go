@@ -244,8 +244,8 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 	if args.Term > rf.currentTerm {
 		reply.Success = true
 		rf.currentTerm = args.Term
-		rf.persist()
 		rf.convertTo("Follower")
+		rf.persist()
 	}
 
 	rf.electionTimer.Reset(rf.getRandomDuration())
@@ -332,8 +332,8 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 		return
 	}
 	rf.votedFor = args.CandidateId
-	reply.VoteGranted = true
 	rf.persist()
+	reply.VoteGranted = true
 	rf.electionTimer.Reset(rf.getRandomDuration())
 }
 
@@ -351,7 +351,6 @@ func (rf *Raft) convertTo(state string) {
 			rf.heartbeatTimer.Stop()
 			rf.electionTimer.Reset(rf.getRandomDuration())
 			rf.votedFor = -1 // reset
-			rf.persist()
 		case "Candidate": //On conversion to candidate, start election
 			rf.doElection()
 		case "Leader":
