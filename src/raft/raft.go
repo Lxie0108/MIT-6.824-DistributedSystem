@@ -568,7 +568,6 @@ func (rf *Raft) broadcastHeartbeat() {
 							rf.applyCommitted()
 						}
 					}
-
 				} else { //unsuccessful reply can be caused by 1. rf.currentTerm < reply.Term (2A)
 					//and 2. If AppendEntries fails because of log inconsistency (2B), in this case, decrement nextIndex and retry
 					if rf.currentTerm < reply.Term { //revert to Follower
