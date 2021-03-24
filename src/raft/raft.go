@@ -28,10 +28,10 @@ import (
 )
 
 const (
-	HeartBeatInterval  = 100 * time.Millisecond
+	HeartBeatInterval  = 120 * time.Millisecond
 	ElectionInterval   = 150 * time.Millisecond
-	ElectionTimeoutMin = 400
-	ElectionTimeoutMax = 550
+	ElectionTimeoutMin = 300
+	ElectionTimeoutMax = 450
 )
 
 // import "bytes"
@@ -252,13 +252,15 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 
 	//2B
 	//Reply false if log doesn’t contain an entry at prevLogIndex whose term matches prevLogTerm
-	if len(rf.log) <= args.PrevLogIndex || rf.log[args.PrevLogIndex].Term != args.PrevLogTerm {
+	
 		if len(rf.log) <= args.PrevLogIndex { //If a follower does not have prevLogIndex in its log, it should return with conflictIndex = len(log) and conflictTerm = None.
 			reply.Success = false
 			reply.Term = rf.currentTerm
 			reply.ConflictIndex = len(rf.log)
-			reply.ConflictTerm = -1			
-		} else if rf.log[args.PrevLogIndex].Term != args.PrevLogTerm {
+			reply.ConflictTerm = -1	
+			return		
+		} 
+		if rf.log[args.PrevLogIndex].Term != args.PrevLogTerm {
 		//If a follower does have prevLogIndex in its log, but the term does not match, it should return conflictTerm = log[prevLogIndex].Term, 
 		//and then search its log for the first index whose entry has term equal to conflictTerm.
 			reply.Success = false
@@ -270,10 +272,11 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 				} else {
 					break
 				}
-			}	
+			}
+			return	
 		}
-		return
-	}
+
+	
 
 	//If an existing entry conflicts with a new one (same index but different terms), delete the existing entry and all that follow it
 	conflict := false
@@ -429,21 +432,20 @@ func (rf *Raft) Start(command interface{}) (int, int, bool) {
 	term := -1
 	isLeader := false
 
-	rf.mu.Lock()
-	defer rf.mu.Unlock()
-
 	// Your code here (2B).
-	term = rf.currentTerm
-	if rf.state == "Leader" {
+	term, isLeader = rf.GetState()
+	if isLeader {
+		rf.mu.Lock()
 		isLeader = true
 		index = len(rf.log)
-		rf.nextIndex[rf.me] = index + 1
-		rf.matchIndex[rf.me] = index
 		rf.log = append(rf.log, LogEntry{
 			Term:    rf.currentTerm,
 			Command: command,
 		})
+		rf.nextIndex[rf.me] = index + 1
+		rf.matchIndex[rf.me] = index
 		rf.persist()
+		rf.mu.Unlock()
 	}
 	return index, term, isLeader
 }
