@@ -60,6 +60,18 @@ type ApplyMsg struct {
 	SnapshotIndex int
 }
 
+type InstallSnapshotArgs struct {
+	Term              int
+	LeaderID          int
+	LastIncludedIndex int
+	LastIncludedTerm  int
+	Data              []byte
+}
+
+type InstallSnapshotReply struct {
+	Term int
+}
+
 //
 // A Go object implementing a single Raft peer.
 //
@@ -164,6 +176,13 @@ func (rf *Raft) readPersist(data []byte) {
 	   rf.votedFor = votedFor
 	   rf.log = log
 	}
+}
+
+//Raft leaders must sometimes tell lagging Raft peers to update their state by installing a snapshot. 
+//You need to implement InstallSnapshot RPC senders and handlers for installing snapshots when this situation arises. 
+//This is in contrast to AppendEntries, which sends log entries that are then applied one by one by the service
+func (rf *Raft) InstallSnapshot(args *InstallSnapshotArgs, reply *InstallSnapshotReply) {
+
 }
 
 //
@@ -411,6 +430,12 @@ func (rf *Raft) sendRequestVote(server int, args *RequestVoteArgs, reply *Reques
 //similar to sendRequestVote
 func (rf *Raft) sendAppendEntries(server int, args *AppendEntriesArgs, reply *AppendEntriesReply) bool {
 	ok := rf.peers[server].Call("Raft.AppendEntries", args, reply)
+	return ok
+}
+
+//similar to sender above
+func (rf *Raft) sendInstallSnapshot(server int, args *InstallSnapshotArgs, reply *InstallSnapshotReply) bool {
+	ok := rf.peers[server].Call("Raft.InstallSnapshot", args, reply)
 	return ok
 }
 
