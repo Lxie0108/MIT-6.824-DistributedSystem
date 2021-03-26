@@ -61,15 +61,15 @@ type ApplyMsg struct {
 }
 
 type InstallSnapshotArgs struct {
-	Term              int
+	Term              int //leader's term
 	LeaderID          int
 	LastIncludedIndex int
 	LastIncludedTerm  int
-	Data              []byte
+	Data              []byte //starts at offset
 }
 
 type InstallSnapshotReply struct {
-	Term int
+	Term int //current term
 }
 
 //
@@ -182,7 +182,23 @@ func (rf *Raft) readPersist(data []byte) {
 //You need to implement InstallSnapshot RPC senders and handlers for installing snapshots when this situation arises. 
 //This is in contrast to AppendEntries, which sends log entries that are then applied one by one by the service
 func (rf *Raft) InstallSnapshot(args *InstallSnapshotArgs, reply *InstallSnapshotReply) {
+	rf.mu.Lock()
+	defer rf.mu.Unlock()
 
+	if args.Term < rf.currentTerm { //Reply immediately if term < currentTerm
+		reply.Term = rf.currentTerm
+		return
+	}
+	//The InstallSnapshot handler can use the applyCh to send the snapshot to the service, by putting the snapshot in ApplyMsg.
+	//The service reads from applyCh, and invokes CondInstallSnapshot with the snapshot to tell Raft that the service is switching to the passed-in snapshot state, and that Raft should update its log at the same time
+	go func() {
+		rf.applyCh <- ApplyMsg{
+			CommandValid: true,
+			Command:      args.Data,
+			CommandTerm:  args.LastIncludedTerm,
+			CommandIndex: args.LastIncludedIndex,
+		}
+	}()
 }
 
 //
