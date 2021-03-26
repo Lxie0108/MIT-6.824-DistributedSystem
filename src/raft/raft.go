@@ -139,6 +139,8 @@ func (rf *Raft) persist() {
 	e.Encode(rf.currentTerm)
 	e.Encode(rf.votedFor)
 	e.Encode(rf.log)
+	e.Encode(rf.lastIncludedIndex)
+	e.Encode(rf.lastIncludedTerm)
 	data := w.Bytes()
 	rf.persister.SaveRaftState(data)
 }
@@ -168,6 +170,8 @@ func (rf *Raft) readPersist(data []byte) {
 	var currentTerm int
 	var votedFor int
 	var log []LogEntry
+	var lastIncludedIndex int
+	var lastIncludedTerm int
 	if d.Decode(&currentTerm) != nil || d. Decode(&votedFor) != nil ||
 	   d.Decode(&log) != nil || d.Decode(&lastIncludedTerm) != nil ||
 	   d.Decode(&lastIncludedIndex) != nil {
@@ -215,7 +219,6 @@ func (rf *Raft) InstallSnapshot(args *InstallSnapshotArgs, reply *InstallSnapsho
 func (rf *Raft) CondInstallSnapshot(lastIncludedTerm int, lastIncludedIndex int, snapshot []byte) bool {
 
 	// Your code here (2D).
-
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
 	if !rf.isNewer(lastIncludedTerm, lastIncludedIndex) { // older snapshots must be refused
@@ -223,8 +226,8 @@ func (rf *Raft) CondInstallSnapshot(lastIncludedTerm int, lastIncludedIndex int,
 	} //else it is recent
 	rf.lastIncludedTerm = lastIncludedTerm
 	rf.lastIncludedIndex = lastIncludedIndex
-	rf.log = []*LogEntry{}
-	rf.persister.SaveStateAndSnapshot(rf.encodeState(), snapshot)
+	rf.log = []LogEntry{}
+	rf.persister.SaveStateAndSnapshot(rf.persister.ReadRaftState(), snapshot)
 	return true
 }
 
@@ -247,7 +250,15 @@ func (rf *Raft) isNewer(lastLogTerm, lastLogIndex int) bool {
 // that index. Raft should now trim its log as much as possible.
 func (rf *Raft) Snapshot(index int, snapshot []byte) {
 	// Your code here (2D).
-
+	rf.mu.Lock()
+	defer rf.mu.Unlock()
+	rf.persister.SaveStateAndSnapshot(rf.persister.ReadRaftState(), snapshot)
+	oldLog := rf.log[index - rf.lastIncludedIndex:]
+	newLog := make([]LogEntry, len(oldLog))
+	copy(newLog[:], oldLog[:])
+	rf.lastIncludedTerm = rf.log[index].Term
+	rf.lastIncludedIndex = index
+	rf.log = newLog
 }
 
 //
