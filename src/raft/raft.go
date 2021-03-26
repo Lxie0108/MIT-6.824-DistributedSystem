@@ -98,6 +98,8 @@ type Raft struct {
 	nextIndex      []int
 	matchIndex     []int
 	applyCh        chan ApplyMsg
+	lastIncludedIndex int
+	lastIncludedTerm int
 }
 
 // return currentTerm and whether this server
@@ -167,7 +169,8 @@ func (rf *Raft) readPersist(data []byte) {
 	var votedFor int
 	var log []LogEntry
 	if d.Decode(&currentTerm) != nil || d. Decode(&votedFor) != nil ||
-	   d.Decode(&log) != nil {
+	   d.Decode(&log) != nil || d.Decode(&lastIncludedTerm) != nil ||
+	   d.Decode(&lastIncludedIndex) != nil {
 	   //error...
 	   DPrintf("%v fails to read persist states", rf)
 	} else {
@@ -176,6 +179,8 @@ func (rf *Raft) readPersist(data []byte) {
 	   rf.currentTerm = currentTerm
 	   rf.votedFor = votedFor
 	   rf.log = log
+	   rf.lastIncludedTerm = lastIncludedTerm
+	   rf.lastIncludedIndex = lastIncludedIndex
 	}
 }
 
@@ -215,17 +220,18 @@ func (rf *Raft) CondInstallSnapshot(lastIncludedTerm int, lastIncludedIndex int,
 	defer rf.mu.Unlock()
 	if !rf.isNewer(lastIncludedTerm, lastIncludedIndex) { // older snapshots must be refused
 		return false
-	}
+	} //else it is recent
 	rf.lastIncludedTerm = lastIncludedTerm
 	rf.lastIncludedIndex = lastIncludedIndex
-	rf.commitIndex = lastIncludedIndex
 	rf.log = []*LogEntry{}
+	rf.persister.SaveStateAndSnapshot(rf.encodeState(), snapshot)
 	return true
 }
 
 //helper method. given lastLogTerm and lastLogIndex it decides if it is a newer log
 func (rf *Raft) isNewer(lastLogTerm, lastLogIndex int) bool {
-	
+	term := rf.lastIncludedTerm
+	index := rf.lastIncludedIndex
 	if lastLogTerm > term {
 		return true
 	}
