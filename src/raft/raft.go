@@ -23,6 +23,7 @@ import (
 	"sync/atomic"
 	"time"
 	"bytes"
+	//"fmt"
 	"6.824/labgob"
 	"6.824/labrpc"
 )
@@ -193,7 +194,7 @@ func (rf *Raft) InstallSnapshot(args *InstallSnapshotArgs, reply *InstallSnapsho
 	//The service reads from applyCh, and invokes CondInstallSnapshot with the snapshot to tell Raft that the service is switching to the passed-in snapshot state, and that Raft should update its log at the same time
 	go func() {
 		rf.applyCh <- ApplyMsg{
-			CommandValid: false
+			CommandValid: false,
 			SnapshotValid: true,
 			Snapshot:      args.Data,
 			SnapshotTerm:  args.LastIncludedTerm,
@@ -337,11 +338,11 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 	//If leaderCommit > commitIndex, set commitIndex = min(leaderCommit, index of last new entry)
 	if args.LeaderCommit > rf.commitIndex {
 		if args.LeaderCommit <= len(rf.log)-1 {
-			rf.commitIndex = args.LeaderCommit
+			rf.applyCommitted(args.LeaderCommit)
 		} else {
-			rf.commitIndex = len(rf.log) - 1
+			rf.applyCommitted(len(rf.log) - 1)
+			
 		}
-		rf.applyCommitted()
 	}
 	reply.Success = true
 }
@@ -608,8 +609,7 @@ func (rf *Raft) broadcastHeartbeat() {
 							}
 						}
 						if count > len(rf.peers)/2 && rf.log[N].Term == rf.currentTerm {
-							rf.commitIndex = N
-							rf.applyCommitted()
+							rf.applyCommitted(N)
 						}
 					}
 				} else { //unsuccessful reply can be caused by 1. rf.currentTerm < reply.Term (2A)
@@ -639,16 +639,20 @@ func (rf *Raft) broadcastHeartbeat() {
 }
 
 //Apply the commited LogEntry. Use applyCh to send ApplyMsg.
-func (rf *Raft) applyCommitted() {
+func (rf *Raft) applyCommitted(newCommitIndex int) {
 	//If commitIndex > lastApplied: increment lastApplied, apply log[lastApplied] to state machine (§5.3)
+	rf.commitIndex = newCommitIndex
 	if rf.commitIndex > rf.lastApplied {
 		go func(start int, Logentry []LogEntry) {
 			for i, entry := range Logentry {
-				msg := ApplyMsg{
-					CommandValid: true,
-					Command:      entry.Command,
-					CommandIndex: i + start,
+				var msg ApplyMsg
+				if entry.Command == nil {
+					msg.CommandValid = false
+				} else {
+					msg.CommandValid = true
 				}
+				msg.Command = entry.Command
+				msg.CommandIndex = start + i
 				rf.applyCh <- msg
 				rf.mu.Lock()
 				rf.lastApplied = msg.CommandIndex
