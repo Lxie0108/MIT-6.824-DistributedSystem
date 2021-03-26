@@ -193,10 +193,11 @@ func (rf *Raft) InstallSnapshot(args *InstallSnapshotArgs, reply *InstallSnapsho
 	//The service reads from applyCh, and invokes CondInstallSnapshot with the snapshot to tell Raft that the service is switching to the passed-in snapshot state, and that Raft should update its log at the same time
 	go func() {
 		rf.applyCh <- ApplyMsg{
-			CommandValid: true,
-			Command:      args.Data,
-			CommandTerm:  args.LastIncludedTerm,
-			CommandIndex: args.LastIncludedIndex,
+			CommandValid: false
+			SnapshotValid: true,
+			Snapshot:      args.Data,
+			SnapshotTerm:  args.LastIncludedTerm,
+			SnapshotIndex: args.LastIncludedIndex,
 		}
 	}()
 }
