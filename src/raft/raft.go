@@ -211,7 +211,28 @@ func (rf *Raft) CondInstallSnapshot(lastIncludedTerm int, lastIncludedIndex int,
 
 	// Your code here (2D).
 
+	rf.mu.Lock()
+	defer rf.mu.Unlock()
+	if !rf.isNewer(lastIncludedTerm, lastIncludedIndex) { // older snapshots must be refused
+		return false
+	}
+	rf.lastIncludedTerm = lastIncludedTerm
+	rf.lastIncludedIndex = lastIncludedIndex
+	rf.commitIndex = lastIncludedIndex
+	rf.log = []*LogEntry{}
 	return true
+}
+
+//helper method. given lastLogTerm and lastLogIndex it decides if it is a newer log
+func (rf *Raft) isNewer(lastLogTerm, lastLogIndex int) bool {
+	
+	if lastLogTerm > term {
+		return true
+	}
+	if lastLogTerm == term {
+		return lastLogIndex >= index
+	}
+	return false
 }
 
 // the service says it has created a snapshot that has
