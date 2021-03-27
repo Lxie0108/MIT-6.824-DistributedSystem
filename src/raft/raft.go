@@ -134,6 +134,10 @@ func (rf *Raft) persist() {
 	// e.Encode(rf.yyy)
 	// data := w.Bytes()
 	// rf.persister.SaveRaftState(data)
+	rf.persister.SaveRaftState(rf.encodeState)
+}
+
+func (rf *Raft) encodeState() []byte {
 	w := new(bytes.Buffer)
 	e := labgob.NewEncoder(w)
 	e.Encode(rf.currentTerm)
@@ -142,7 +146,7 @@ func (rf *Raft) persist() {
 	e.Encode(rf.lastIncludedIndex)
 	e.Encode(rf.lastIncludedTerm)
 	data := w.Bytes()
-	rf.persister.SaveRaftState(data)
+	return data
 }
 
 //
@@ -196,9 +200,17 @@ func (rf *Raft) InstallSnapshot(args *InstallSnapshotArgs, reply *InstallSnapsho
 	defer rf.mu.Unlock()
 
 	if args.Term < rf.currentTerm { //Reply immediately if term < currentTerm
-		reply.Term = rf.currentTerm
 		return
 	}
+
+	if args.Term > rf.currentTerm {
+		rf.currentTerm = args.Term
+		rf.convertTo("Follower")
+	}
+
+	//If existing log entry has same index and term as snapshot’slast included entry, retain log entries following it and reply
+
+
 	//The InstallSnapshot handler can use the applyCh to send the snapshot to the service, by putting the snapshot in ApplyMsg.
 	//The service reads from applyCh, and invokes CondInstallSnapshot with the snapshot to tell Raft that the service is switching to the passed-in snapshot state, and that Raft should update its log at the same time
 	go func() {
@@ -226,8 +238,9 @@ func (rf *Raft) CondInstallSnapshot(lastIncludedTerm int, lastIncludedIndex int,
 	} //else it is recent
 	rf.lastIncludedTerm = lastIncludedTerm
 	rf.lastIncludedIndex = lastIncludedIndex
+	rf.commitIndex = lastIncludedIndex
 	rf.log = []LogEntry{}
-	rf.persister.SaveStateAndSnapshot(rf.persister.ReadRaftState(), snapshot)
+	rf.persister.SaveStateAndSnapshot(rf.encodeState(), snapshot)
 	return true
 }
 
@@ -252,13 +265,13 @@ func (rf *Raft) Snapshot(index int, snapshot []byte) {
 	// Your code here (2D).
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
-	rf.persister.SaveStateAndSnapshot(rf.persister.ReadRaftState(), snapshot)
 	oldLog := rf.log[index - rf.lastIncludedIndex:]
 	newLog := make([]LogEntry, len(oldLog))
 	copy(newLog[:], oldLog[:])
 	rf.lastIncludedTerm = rf.log[index].Term
 	rf.lastIncludedIndex = index
 	rf.log = newLog
+	rf.persister.SaveStateAndSnapshot(rf.encodeState(), snapshot)
 }
 
 //
