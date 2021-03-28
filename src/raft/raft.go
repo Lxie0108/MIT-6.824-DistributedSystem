@@ -134,7 +134,7 @@ func (rf *Raft) persist() {
 	// e.Encode(rf.yyy)
 	// data := w.Bytes()
 	// rf.persister.SaveRaftState(data)
-	rf.persister.SaveRaftState(rf.encodeState)
+	rf.persister.SaveRaftState(rf.encodeState())
 }
 
 func (rf *Raft) encodeState() []byte {
@@ -272,6 +272,31 @@ func (rf *Raft) Snapshot(index int, snapshot []byte) {
 	rf.lastIncludedIndex = index
 	rf.log = newLog
 	rf.persister.SaveStateAndSnapshot(rf.encodeState(), snapshot)
+}
+
+func (rf *Raft) installSnapshotToServer(server int) {
+	rf.mu.Lock()
+	args := &InstallSnapshotArgs{
+		Term:              rf.currentTerm,
+		LeaderID:          rf.me,
+		LastIncludedIndex: rf.lastIncludedIndex,
+		LastIncludedTerm:  rf.lastIncludedTerm,
+		Data:              rf.persister.ReadSnapshot(),
+	}
+	rf.mu.Unlock()
+
+	if rf.sendInstallSnapshot(server, &args, &reply) {
+		rf.mu.Lock()
+		if reply.Term > rf.currentTerm {
+			rf.currentTerm = reply.Term
+			rf.convertTo("Follower")
+			rf.persist()
+		} else {
+			rf.matchIndex[server] = args.LastIncludedIndex
+			rf.nextIndex[server] = rf.matchIndex[server] + 1
+		}
+		rf.mu.Unlock()
+	}
 }
 
 //
