@@ -285,7 +285,8 @@ func (rf *Raft) installSnapshotToServer(server int) {
 	}
 	rf.mu.Unlock()
 
-	if rf.sendInstallSnapshot(server, &args, &reply) {
+	reply := &InstallSnapshotReply{}
+	if rf.sendInstallSnapshot(server, args, reply) {
 		rf.mu.Lock()
 		if reply.Term > rf.currentTerm {
 			rf.currentTerm = reply.Term
@@ -719,6 +720,10 @@ func (rf *Raft) applyCommitted(newCommitIndex int) {
 	//If commitIndex > lastApplied: increment lastApplied, apply log[lastApplied] to state machine (§5.3)
 	rf.commitIndex = newCommitIndex
 	if rf.commitIndex > rf.lastApplied {
+		startIndex := rf.lastApplied + 1 - rf.lastIncludedIndex
+		endIndex := rf.commitIndex + 1 - rf.lastIncludedIndex
+		entries := append([]LogEntry{},
+			rf.log[startIndex:endIndex]...)
 		go func(start int, Logentry []LogEntry) {
 			for i, entry := range Logentry {
 				var msg ApplyMsg
@@ -734,7 +739,7 @@ func (rf *Raft) applyCommitted(newCommitIndex int) {
 				rf.lastApplied = msg.CommandIndex
 				rf.mu.Unlock()
 			}
-		}(rf.lastApplied+1, rf.log[rf.lastApplied+1:rf.commitIndex+1])
+		}(rf.lastApplied+1, entries)
 	}
 }
 
