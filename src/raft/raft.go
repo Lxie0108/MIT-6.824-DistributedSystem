@@ -364,25 +364,34 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 
 	rf.electionTimer.Reset(rf.getRandomDuration())
 
-	//2B
+	if args.PrevLogIndex <= rf.lastIncludedIndex {
+		reply.Success = true
+		if args.PrevLogIndex+len(args.LogEntries) > rf.lastIncludedIndex {
+			startIndex := rf.snapshottedIndex - args.PrevLogIndex //keep the last snapshotted one
+			rf.log = rf.log[:1]
+			rf.log = append(rf.log, args.LogEntries[startIndex:]...)
+		}
+		return
+	}
+
+	//2B 
 	//Reply false if log doesn’t contain an entry at prevLogIndex whose term matches prevLogTerm
-	
-		if len(rf.log) <= args.PrevLogIndex { //If a follower does not have prevLogIndex in its log, it should return with conflictIndex = len(log) and conflictTerm = None.
+		if (len(rf.log) + rf.lastIncludedIndex) <= args.PrevLogIndex { //If a follower does not have prevLogIndex in its log, it should return with conflictIndex = len(log) and conflictTerm = None.
 			reply.Success = false
 			reply.Term = rf.currentTerm
-			reply.ConflictIndex = len(rf.log)
+			reply.ConflictIndex = len(rf.log) + rf.lastIncludedIndex + 1
 			reply.ConflictTerm = -1	
 			return		
 		} 
-		if rf.log[args.PrevLogIndex].Term != args.PrevLogTerm {
+		if rf.log[args.PrevLogIndex - rf.lastIncludedIndex].Term != args.PrevLogTerm {
 		//If a follower does have prevLogIndex in its log, but the term does not match, it should return conflictTerm = log[prevLogIndex].Term, 
 		//and then search its log for the first index whose entry has term equal to conflictTerm.
 			reply.Success = false
 			reply.Term = rf.currentTerm
-			reply.ConflictTerm = rf.log[args.PrevLogIndex].Term // it unmatches leader's term
-			for i := args.PrevLogIndex; i > 0; i-- { //starts at PrevLogIndex and searches back
-				if rf.log[i].Term == rf.log[args.PrevLogIndex].Term {
-					reply.ConflictIndex = i
+			reply.ConflictTerm = rf.log[args.PrevLogIndex + rf.lastIncludedIndex + 1].Term // it unmatches leader's term
+			for i := args.PrevLogIndex - rf.lastIncludedIndex; i >= 0; i-- { //starts at PrevLogIndex and searches back
+				if rf.log[i].Term == reply.ConflictTerm {
+					reply.ConflictIndex = i + rf.lastIncludedIndex + 1
 				} else {
 					break
 				}
@@ -397,7 +406,8 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 	conflictIdx := -1
 	for i := range args.Entries {
 		curr := args.PrevLogIndex + 1 + i
-		if curr >= len(rf.log) || rf.log[curr].Term != args.Entries[i].Term {
+		currReal := curr - rf.lastIncludedIndex
+		if currReal >= len(rf.log) || rf.log[currReal].Term != args.Entries[i].Term {
 			//rf.log = rf.log[:curr]
 			conflict = true
 			conflictIdx = i
@@ -407,17 +417,17 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 
 	//deal with conflict logs
 	if conflict {
-		rf.log = rf.log[:args.PrevLogIndex+1+conflictIdx] //delete the conflict entries
+		rf.log = rf.log[:args.PrevLogIndex+1+conflictIdx-rf.lastIncludedIndex] //delete the conflict entries
 		rf.log = append(rf.log, args.Entries[conflictIdx:]...) //append with leader's
 		rf.persist()
 	}
 
 	//If leaderCommit > commitIndex, set commitIndex = min(leaderCommit, index of last new entry)
 	if args.LeaderCommit > rf.commitIndex {
-		if args.LeaderCommit <= len(rf.log)-1 {
+		if args.LeaderCommit <= len(rf.log)-1 + rf.lastIncludedIndex {
 			rf.applyCommitted(args.LeaderCommit)
 		} else {
-			rf.applyCommitted(len(rf.log) - 1)
+			rf.applyCommitted(len(rf.log) - 1 + rf.lastIncludedIndex)
 			
 		}
 	}
