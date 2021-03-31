@@ -666,14 +666,20 @@ func (rf *Raft) broadcastHeartbeat() {
 		go func(server int) {
 			rf.mu.Lock()
 			prev := rf.nextIndex[server] - 1 // PreviousLogIndex should be index of log entry immediately preceding new ones.
-			//It should be the last index that Follower has been update-to-date with the leader, therefore, it is nextIndex[Follower] - 1.		
-			entries := make([]LogEntry, len(rf.log[prev+1:]))
-			copy(entries, rf.log[prev+1:])
+			//It should be the last index that Follower has been update-to-date with the leader, therefore, it is nextIndex[Follower] - 1.	
+			
+			if prevLogIndex < rf.lastIncludedIndex {
+				rf.mu.Unlock()
+				rf.installSnapshotToServer(server)
+				return
+			}
+			entries := make([]LogEntry, len(rf.log[prev+1-rf.lastIncludedIndex:]))
+			copy(entries, rf.log[prev+1 - rf.lastIncludedIndex:])
 			args := AppendEntriesArgs{
 				Term:         rf.currentTerm,
 				LeaderId:     rf.me,
 				PrevLogIndex: prev,
-				PrevLogTerm:  rf.log[prev].Term,
+				PrevLogTerm:  rf.log[prev-rf.lastIncludedIndex].Term,
 				Entries:      entries,
 				LeaderCommit: rf.commitIndex,
 			}
@@ -688,7 +694,7 @@ func (rf *Raft) broadcastHeartbeat() {
 					rf.matchIndex[server] = args.PrevLogIndex + len(args.Entries)
 
 					//If there exists an N such that N > commitIndex, a majority of matchIndex[i] ≥ N, and log[N].term == currentTerm: set commitIndex = N
-					for N := len(rf.log) - 1; N > rf.commitIndex; N-- {
+					for N := len(rf.log) - 1 + rf.lastIncludedIndex; N > rf.commitIndex; N-- {
 						count := 0
 						for _, matchIndex := range rf.matchIndex {
 							if matchIndex >= N {
@@ -711,8 +717,8 @@ func (rf *Raft) broadcastHeartbeat() {
 						//If it does not find an entry with that term, it should set nextIndex = conflictIndex.
 						rf.nextIndex[server] = reply.ConflictIndex
 						if reply.ConflictTerm != -1 {
-							for i := args.PrevLogIndex; i > 0; i-- {
-								if rf.log[i-1].Term == reply.ConflictTerm {
+							for i := args.PrevLogIndex; i >= rf.lastIncludedIndex; i-- {
+								if rf.log[i-1-rf.lastIncludedIndex].Term == reply.ConflictTerm {
 									rf.nextIndex[server] = i	
 									break
 								}
