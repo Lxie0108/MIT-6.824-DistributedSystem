@@ -100,6 +100,7 @@ type Raft struct {
 	applyCh        chan ApplyMsg
 	lastIncludedIndex int
 	lastIncludedTerm int
+	snapshotIndex int
 }
 
 // return currentTerm and whether this server
@@ -199,6 +200,7 @@ func (rf *Raft) InstallSnapshot(args *InstallSnapshotArgs, reply *InstallSnapsho
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
 
+	reply.Term = rf.currentTerm
 	if args.Term < rf.currentTerm { //Reply immediately if term < currentTerm
 		return
 	}
@@ -209,7 +211,19 @@ func (rf *Raft) InstallSnapshot(args *InstallSnapshotArgs, reply *InstallSnapsho
 	}
 
 	//If existing log entry has same index and term as snapshot’slast included entry, retain log entries following it and reply
-
+	if len(rf.log) > args.LastIncludedIndex - rf.snapshotIndex && rf.log[args.LastIncludedIndex - rf.snapshotIndex].Term == args.LastIncludedTerm {
+		rf.log = rf.log[args.LastIncludedIndex - rf.snapshotIndex:]
+	} else { //Discard the entire log
+		rf.log = []LogEntry{{Term: args.LastIncludedTerm, Command: nil}}
+	}
+	//Save snapshot file, discard any existing or partial snapshot with a smaller index
+	if rf.commitIndex < rf.snapshotIndex {
+		rf.commitIndex = rf.snapshotIndex
+	}
+	if rf.lastApplied < rf.snapshotIndex {
+		rf.lastApplied = rf.snapshotIndex
+	}
+	rf.persister.SaveStateAndSnapshot(rf.encodeState(), args.Data)
 
 	//The InstallSnapshot handler can use the applyCh to send the snapshot to the service, by putting the snapshot in ApplyMsg.
 	//The service reads from applyCh, and invokes CondInstallSnapshot with the snapshot to tell Raft that the service is switching to the passed-in snapshot state, and that Raft should update its log at the same time
@@ -265,13 +279,20 @@ func (rf *Raft) Snapshot(index int, snapshot []byte) {
 	// Your code here (2D).
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
-	oldLog := rf.log[index - rf.lastIncludedIndex:]
+	oldLog := rf.log[index - rf.snapshotIndex:]
 	newLog := make([]LogEntry, len(oldLog))
 	copy(newLog[:], oldLog[:])
 	rf.lastIncludedTerm = rf.log[index].Term
 	rf.lastIncludedIndex = index
+	rf.snapshotIndex = index
 	rf.log = newLog
 	rf.persister.SaveStateAndSnapshot(rf.encodeState(), snapshot)
+	for i := range rf.peers {
+		if i == rf.me {
+			continue
+		}
+		go rf.installSnapshotToServer(i)
+	}
 }
 
 func (rf *Raft) installSnapshotToServer(server int) {
@@ -366,10 +387,10 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 
 	if args.PrevLogIndex <= rf.lastIncludedIndex {
 		reply.Success = true
-		if args.PrevLogIndex+len(args.LogEntries) > rf.lastIncludedIndex {
-			startIndex := rf.snapshottedIndex - args.PrevLogIndex //keep the last snapshotted one
+		if args.PrevLogIndex+len(args.Entries) > rf.lastIncludedIndex {
+			startIndex := rf.lastIncludedIndex - args.PrevLogIndex //keep the last snapshotted one
 			rf.log = rf.log[:1]
-			rf.log = append(rf.log, args.LogEntries[startIndex:]...)
+			rf.log = append(rf.log, args.Entries[startIndex:]...)
 		}
 		return
 	}
@@ -668,7 +689,7 @@ func (rf *Raft) broadcastHeartbeat() {
 			prev := rf.nextIndex[server] - 1 // PreviousLogIndex should be index of log entry immediately preceding new ones.
 			//It should be the last index that Follower has been update-to-date with the leader, therefore, it is nextIndex[Follower] - 1.	
 			
-			if prevLogIndex < rf.lastIncludedIndex {
+			if prev < rf.lastIncludedIndex {
 				rf.mu.Unlock()
 				rf.installSnapshotToServer(server)
 				return
