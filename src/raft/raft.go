@@ -282,13 +282,11 @@ func (rf *Raft) Snapshot(index int, snapshot []byte) {
 	// Your code here (2D).
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
-	oldLog := rf.log[index - rf.snapshotIndex:]
-	newLog := make([]LogEntry, len(oldLog))
-	copy(newLog[:], oldLog[:])
-	rf.lastIncludedTerm = rf.log[index].Term
-	rf.lastIncludedIndex = index
+	if index <= rf.snapshotIndex || rf.snapshotIndex == 0{
+		return
+	}
+	rf.log = rf.log[index - rf.snapshotIndex:]
 	rf.snapshotIndex = index
-	rf.log = newLog
 	rf.persister.SaveStateAndSnapshot(rf.encodeState(), snapshot)
 	for i := range rf.peers {
 		if i == rf.me {
