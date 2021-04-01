@@ -193,8 +193,6 @@ func (rf *Raft) readPersist(data []byte) {
 	   rf.lastIncludedTerm = lastIncludedTerm
 	   rf.lastIncludedIndex = lastIncludedIndex
 	   rf.snapshotIndex = snapshotIndex
-	   rf.lastApplied = snapshotIndex
-	   rf.commitIndex = snapshotIndex
 	}
 }
 
@@ -743,9 +741,9 @@ func (rf *Raft) broadcastHeartbeat() {
 						//If it does not find an entry with that term, it should set nextIndex = conflictIndex.
 						rf.nextIndex[server] = reply.ConflictIndex
 						if reply.ConflictTerm != -1 {
-							for i := args.PrevLogIndex; i >= rf.snapshotIndex; i-- {
+							for i := args.PrevLogIndex; i >= rf.snapshotIndex+1; i-- {
 								if rf.log[i-1-rf.snapshotIndex].Term == reply.ConflictTerm {
-									rf.nextIndex[server] = i	
+									rf.nextIndex[server] = i
 									break
 								}
 							}		
