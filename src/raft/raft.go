@@ -146,6 +146,7 @@ func (rf *Raft) encodeState() []byte {
 	e.Encode(rf.log)
 	e.Encode(rf.lastIncludedIndex)
 	e.Encode(rf.lastIncludedTerm)
+	e.Encode(rf.snapshotIndex)
 	data := w.Bytes()
 	return data
 }
@@ -177,9 +178,10 @@ func (rf *Raft) readPersist(data []byte) {
 	var log []LogEntry
 	var lastIncludedIndex int
 	var lastIncludedTerm int
+	var snapshotIndex int
 	if d.Decode(&currentTerm) != nil || d. Decode(&votedFor) != nil ||
 	   d.Decode(&log) != nil || d.Decode(&lastIncludedTerm) != nil ||
-	   d.Decode(&lastIncludedIndex) != nil {
+	   d.Decode(&lastIncludedIndex) != nil || d.Decode(&snapshotIndex) != nil{
 	   //error...
 	   DPrintf("%v fails to read persist states", rf)
 	} else {
@@ -190,6 +192,9 @@ func (rf *Raft) readPersist(data []byte) {
 	   rf.log = log
 	   rf.lastIncludedTerm = lastIncludedTerm
 	   rf.lastIncludedIndex = lastIncludedIndex
+	   rf.snapshotIndex = snapshotIndex
+	   rf.lastApplied = snapshotIndex
+	   rf.commitIndex = snapshotIndex
 	}
 }
 
@@ -301,7 +306,7 @@ func (rf *Raft) installSnapshotToServer(server int) {
 		Term:              rf.currentTerm,
 		LeaderID:          rf.me,
 		LastIncludedIndex: rf.lastIncludedIndex,
-		LastIncludedTerm:  rf.lastIncludedTerm,
+		LastIncludedTerm:  rf.log[0].Term,
 		Data:              rf.persister.ReadSnapshot(),
 	}
 	rf.mu.Unlock()
@@ -385,10 +390,10 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 
 	rf.electionTimer.Reset(rf.getRandomDuration())
 
-	if args.PrevLogIndex <= rf.lastIncludedIndex {
+	if args.PrevLogIndex <= rf.snapshotIndex {
 		reply.Success = true
-		if args.PrevLogIndex+len(args.Entries) > rf.lastIncludedIndex {
-			startIndex := rf.lastIncludedIndex - args.PrevLogIndex //keep the last snapshotted one
+		if args.PrevLogIndex +len(args.Entries) > rf.snapshotIndex {
+			startIndex := rf.snapshotIndex- args.PrevLogIndex
 			rf.log = rf.log[:1]
 			rf.log = append(rf.log, args.Entries[startIndex:]...)
 		}
@@ -397,22 +402,22 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 
 	//2B 
 	//Reply false if log doesn’t contain an entry at prevLogIndex whose term matches prevLogTerm
-		if (len(rf.log) + rf.lastIncludedIndex) <= args.PrevLogIndex { //If a follower does not have prevLogIndex in its log, it should return with conflictIndex = len(log) and conflictTerm = None.
+		if len(rf.log) + rf.snapshotIndex <= args.PrevLogIndex { //If a follower does not have prevLogIndex in its log, it should return with conflictIndex = len(log) and conflictTerm = None.
 			reply.Success = false
 			reply.Term = rf.currentTerm
-			reply.ConflictIndex = len(rf.log) + rf.lastIncludedIndex + 1
+			reply.ConflictIndex = len(rf.log) + rf.snapshotIndex
 			reply.ConflictTerm = -1	
 			return		
 		} 
-		if rf.log[args.PrevLogIndex - rf.lastIncludedIndex].Term != args.PrevLogTerm {
+		if rf.log[args.PrevLogIndex - rf.snapshotIndex].Term != args.PrevLogTerm {
 		//If a follower does have prevLogIndex in its log, but the term does not match, it should return conflictTerm = log[prevLogIndex].Term, 
 		//and then search its log for the first index whose entry has term equal to conflictTerm.
 			reply.Success = false
 			reply.Term = rf.currentTerm
-			reply.ConflictTerm = rf.log[args.PrevLogIndex + rf.lastIncludedIndex + 1].Term // it unmatches leader's term
+			reply.ConflictTerm = rf.log[args.PrevLogIndex - rf.snapshotIndex].Term // it unmatches leader's term
 			for i := args.PrevLogIndex - rf.lastIncludedIndex; i >= 0; i-- { //starts at PrevLogIndex and searches back
 				if rf.log[i].Term == reply.ConflictTerm {
-					reply.ConflictIndex = i + rf.lastIncludedIndex + 1
+					reply.ConflictIndex = i
 				} else {
 					break
 				}
@@ -438,17 +443,17 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 
 	//deal with conflict logs
 	if conflict {
-		rf.log = rf.log[:args.PrevLogIndex+1+conflictIdx-rf.lastIncludedIndex] //delete the conflict entries
+		rf.log = rf.log[:args.PrevLogIndex+1+conflictIdx-rf.snapshotIndex] //delete the conflict entries
 		rf.log = append(rf.log, args.Entries[conflictIdx:]...) //append with leader's
 		rf.persist()
 	}
 
 	//If leaderCommit > commitIndex, set commitIndex = min(leaderCommit, index of last new entry)
 	if args.LeaderCommit > rf.commitIndex {
-		if args.LeaderCommit <= len(rf.log)-1 + rf.lastIncludedIndex {
+		if args.LeaderCommit <= len(rf.log)-1 + rf.snapshotIndex{
 			rf.applyCommitted(args.LeaderCommit)
 		} else {
-			rf.applyCommitted(len(rf.log) - 1 + rf.lastIncludedIndex)
+			rf.applyCommitted(len(rf.log) - 1 + rf.snapshotIndex)
 			
 		}
 	}
@@ -474,7 +479,7 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 		rf.persist()
 	}
 	//If votedFor is null or candidateId, and candidate’s log is at least as up-to-date as receiver’s log, grant vote
-	if (rf.votedFor != -1 || rf.votedFor != args.CandidateId) && (args.LastLogTerm < rf.log[len(rf.log)-1].Term || (args.LastLogTerm == rf.log[len(rf.log)-1].Term && args.LastLogIndex < len(rf.log)-1)) {
+	if (rf.votedFor != -1 || rf.votedFor != args.CandidateId) && (args.LastLogTerm < rf.log[len(rf.log)-1].Term || (args.LastLogTerm == rf.log[len(rf.log)-1].Term && args.LastLogIndex < len(rf.log)-1 + rf.snapshotIndex)) {
 		reply.Term = rf.currentTerm
 		reply.VoteGranted = false
 		return
@@ -504,10 +509,10 @@ func (rf *Raft) convertTo(state string) {
 		case "Leader":
 			//initialize nextIndex and matchIndex
 			for i := range rf.nextIndex {
-				rf.nextIndex[i] = len(rf.log)
+				rf.nextIndex[i] = len(rf.log) + rf.snapshotIndex
 			}
 			for i := range rf.matchIndex {
-				rf.matchIndex[i] = 0
+				rf.matchIndex[i] = rf.snapshotIndex
 			}
 			rf.electionTimer.Stop()
 			rf.broadcastHeartbeat()
@@ -588,7 +593,7 @@ func (rf *Raft) Start(command interface{}) (int, int, bool) {
 	if isLeader {
 		rf.mu.Lock()
 		isLeader = true
-		index = len(rf.log)
+		index = len(rf.log) + rf.snapshotIndex
 		rf.log = append(rf.log, LogEntry{
 			Term:    rf.currentTerm,
 			Command: command,
@@ -641,7 +646,7 @@ func (rf *Raft) doElection() {
 	args := RequestVoteArgs{
 		Term:         rf.currentTerm,
 		CandidateId:  rf.me,
-		LastLogIndex: len(rf.log) - 1,
+		LastLogIndex: len(rf.log) - 1 + rf.snapshotIndex,
 		LastLogTerm:  rf.log[len(rf.log)-1].Term,
 	}
 	nMajority := len(rf.peers) / 2
@@ -689,18 +694,18 @@ func (rf *Raft) broadcastHeartbeat() {
 			prev := rf.nextIndex[server] - 1 // PreviousLogIndex should be index of log entry immediately preceding new ones.
 			//It should be the last index that Follower has been update-to-date with the leader, therefore, it is nextIndex[Follower] - 1.	
 			
-			if prev < rf.lastIncludedIndex {
+			if prev < rf.snapshotIndex {
 				rf.mu.Unlock()
 				rf.installSnapshotToServer(server)
 				return
 			}
-			entries := make([]LogEntry, len(rf.log[prev+1-rf.lastIncludedIndex:]))
-			copy(entries, rf.log[prev+1 - rf.lastIncludedIndex:])
+			entries := make([]LogEntry, len(rf.log[prev+1-rf.snapshotIndex:]))
+			copy(entries, rf.log[prev+1 - rf.snapshotIndex:])
 			args := AppendEntriesArgs{
 				Term:         rf.currentTerm,
 				LeaderId:     rf.me,
 				PrevLogIndex: prev,
-				PrevLogTerm:  rf.log[prev-rf.lastIncludedIndex].Term,
+				PrevLogTerm:  rf.log[prev-rf.snapshotIndex].Term,
 				Entries:      entries,
 				LeaderCommit: rf.commitIndex,
 			}
@@ -738,8 +743,8 @@ func (rf *Raft) broadcastHeartbeat() {
 						//If it does not find an entry with that term, it should set nextIndex = conflictIndex.
 						rf.nextIndex[server] = reply.ConflictIndex
 						if reply.ConflictTerm != -1 {
-							for i := args.PrevLogIndex; i >= rf.lastIncludedIndex; i-- {
-								if rf.log[i-1-rf.lastIncludedIndex].Term == reply.ConflictTerm {
+							for i := args.PrevLogIndex; i >= rf.snapshotIndex; i-- {
+								if rf.log[i-1-rf.snapshotIndex].Term == reply.ConflictTerm {
 									rf.nextIndex[server] = i	
 									break
 								}
@@ -757,8 +762,8 @@ func (rf *Raft) applyCommitted(newCommitIndex int) {
 	//If commitIndex > lastApplied: increment lastApplied, apply log[lastApplied] to state machine (§5.3)
 	rf.commitIndex = newCommitIndex
 	if rf.commitIndex > rf.lastApplied {
-		startIndex := rf.lastApplied + 1 - rf.lastIncludedIndex
-		endIndex := rf.commitIndex + 1 - rf.lastIncludedIndex
+		startIndex := rf.lastApplied + 1 - rf.snapshotIndex
+		endIndex := rf.commitIndex + 1 - rf.snapshotIndex
 		entries := append([]LogEntry{},
 			rf.log[startIndex:endIndex]...)
 		go func(start int, Logentry []LogEntry) {
