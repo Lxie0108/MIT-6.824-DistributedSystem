@@ -211,14 +211,13 @@ func (rf *Raft) InstallSnapshot(args *InstallSnapshotArgs, reply *InstallSnapsho
 		rf.log = []LogEntry{{Term: args.LastIncludedTerm, Command: nil}}
 	}
 	//Save snapshot file, discard any existing or partial snapshot with a smaller index
-	rf.snapshotIndex = args.LastIncludedIndex
-	if rf.commitIndex < rf.snapshotIndex {
-		rf.commitIndex = rf.snapshotIndex
-	}
-	if rf.lastApplied < rf.snapshotIndex {
-		rf.lastApplied = rf.snapshotIndex
-	}
+	rf.snapshotIndex = args.LastIncludedIndex	
+	rf.commitIndex = rf.snapshotIndex
+	rf.lastApplied = rf.snapshotIndex	
 	rf.persister.SaveStateAndSnapshot(rf.encodeState(), args.Data)
+	if rf.lastApplied > rf.snapshotIndex {
+		return
+	}
 
 	//The InstallSnapshot handler can use the applyCh to send the snapshot to the service, by putting the snapshot in ApplyMsg.
 	//The service reads from applyCh, and invokes CondInstallSnapshot with the snapshot to tell Raft that the service is switching to the passed-in snapshot state, and that Raft should update its log at the same time
@@ -290,7 +289,11 @@ func (rf *Raft) Snapshot(index int, snapshot []byte) {
 
 func (rf *Raft) installSnapshotToServer(server int) {
 	rf.mu.Lock()
-	args := &InstallSnapshotArgs{
+	if rf.state != "Leader" {
+		rf.mu.Unlock()
+		return
+	}
+	args := InstallSnapshotArgs{
 		Term:              rf.currentTerm,
 		LeaderID:          rf.me,
 		LastIncludedIndex: rf.snapshotIndex,
@@ -299,8 +302,8 @@ func (rf *Raft) installSnapshotToServer(server int) {
 	}
 	rf.mu.Unlock()
 
-	reply := &InstallSnapshotReply{}
-	if rf.sendInstallSnapshot(server, args, reply) {
+	reply := InstallSnapshotReply{}
+	if rf.sendInstallSnapshot(server, &args, &reply) {
 		rf.mu.Lock()
 		if reply.Term > rf.currentTerm {
 			rf.currentTerm = reply.Term
@@ -381,7 +384,7 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 	if args.PrevLogIndex <= rf.snapshotIndex {
 		reply.Success = true
 		if args.PrevLogIndex +len(args.Entries) > rf.snapshotIndex {
-			startIndex := rf.snapshotIndex- args.PrevLogIndex
+			startIndex := rf.snapshotIndex - args.PrevLogIndex
 			rf.log = rf.log[:1]
 			rf.log = append(rf.log, args.Entries[startIndex:]...)
 		}
@@ -390,7 +393,7 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 
 	//2B 
 	//Reply false if log doesn’t contain an entry at prevLogIndex whose term matches prevLogTerm
-		if len(rf.log) + rf.snapshotIndex - 1 < args.PrevLogIndex { //If a follower does not have prevLogIndex in its log, it should return with conflictIndex = len(log) and conflictTerm = None.
+		if len(rf.log) - 1 + rf.snapshotIndex < args.PrevLogIndex { //If a follower does not have prevLogIndex in its log, it should return with conflictIndex = len(log) and conflictTerm = None.
 			reply.Success = false
 			reply.Term = rf.currentTerm
 			reply.ConflictIndex = len(rf.log) + rf.snapshotIndex
@@ -421,9 +424,7 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 	conflict := false
 	conflictIdx := -1
 	for i := range args.Entries {
-		curr := args.PrevLogIndex + 1 + i
-		currReal := curr - rf.snapshotIndex
-		if currReal >= len(rf.log) || rf.log[currReal].Term != args.Entries[i].Term {
+		if len(rf.log) < args.PrevLogIndex+2+i-rf.snapshotIndex || rf.log[args.PrevLogIndex+1+i-rf.snapshotIndex].Term != args.Entries[i].Term {
 			//rf.log = rf.log[:curr]
 			conflict = true
 			conflictIdx = i
@@ -710,6 +711,7 @@ func (rf *Raft) broadcastHeartbeat() {
 					rf.matchIndex[server] = args.PrevLogIndex + len(args.Entries)
 
 					//If there exists an N such that N > commitIndex, a majority of matchIndex[i] ≥ N, and log[N].term == currentTerm: set commitIndex = N
+
 					for N := len(rf.log) - 1 + rf.snapshotIndex; N > rf.commitIndex; N-- {
 						count := 0
 						for _, matchIndex := range rf.matchIndex {
@@ -717,8 +719,11 @@ func (rf *Raft) broadcastHeartbeat() {
 								count++
 							}
 						}
-						if count > len(rf.peers)/2 && rf.log[N-rf.snapshotIndex].Term == rf.currentTerm {
-							rf.applyCommitted(N)
+						if count > len(rf.peers)/2 {
+							if rf.log[N-rf.snapshotIndex].Term == rf.currentTerm{
+								rf.applyCommitted(N)
+								break
+							}
 						}
 					}
 				} else { //unsuccessful reply can be caused by 1. rf.currentTerm < reply.Term (2A)
@@ -754,8 +759,7 @@ func (rf *Raft) applyCommitted(newCommitIndex int) {
 	if rf.commitIndex > rf.lastApplied {
 		startIndex := rf.lastApplied + 1 - rf.snapshotIndex
 		endIndex := rf.commitIndex + 1 - rf.snapshotIndex
-		entries := append([]LogEntry{},
-			rf.log[startIndex:endIndex]...)
+		entries := append([]LogEntry{}, rf.log[startIndex:endIndex]...)
 		go func(start int, Logentry []LogEntry) {
 			for i, entry := range Logentry {
 				var msg ApplyMsg
