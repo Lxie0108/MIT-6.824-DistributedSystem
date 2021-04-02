@@ -98,8 +98,6 @@ type Raft struct {
 	nextIndex      []int
 	matchIndex     []int
 	applyCh        chan ApplyMsg
-	lastIncludedIndex int
-	lastIncludedTerm int
 	snapshotIndex int
 }
 
@@ -144,8 +142,6 @@ func (rf *Raft) encodeState() []byte {
 	e.Encode(rf.currentTerm)
 	e.Encode(rf.votedFor)
 	e.Encode(rf.log)
-	e.Encode(rf.lastIncludedIndex)
-	e.Encode(rf.lastIncludedTerm)
 	e.Encode(rf.snapshotIndex)
 	data := w.Bytes()
 	return data
@@ -176,12 +172,9 @@ func (rf *Raft) readPersist(data []byte) {
 	var currentTerm int
 	var votedFor int
 	var log []LogEntry
-	var lastIncludedIndex int
-	var lastIncludedTerm int
 	var snapshotIndex int
 	if d.Decode(&currentTerm) != nil || d. Decode(&votedFor) != nil ||
-	   d.Decode(&log) != nil || d.Decode(&lastIncludedTerm) != nil ||
-	   d.Decode(&lastIncludedIndex) != nil || d.Decode(&snapshotIndex) != nil{
+	   d.Decode(&log) != nil ||d.Decode(&snapshotIndex) != nil{
 	   //error...
 	   DPrintf("%v fails to read persist states", rf)
 	} else {
@@ -190,8 +183,6 @@ func (rf *Raft) readPersist(data []byte) {
 	   rf.currentTerm = currentTerm
 	   rf.votedFor = votedFor
 	   rf.log = log
-	   rf.lastIncludedTerm = lastIncludedTerm
-	   rf.lastIncludedIndex = lastIncludedIndex
 	   rf.snapshotIndex = snapshotIndex
 	}
 }
@@ -204,7 +195,7 @@ func (rf *Raft) InstallSnapshot(args *InstallSnapshotArgs, reply *InstallSnapsho
 	defer rf.mu.Unlock()
 
 	reply.Term = rf.currentTerm
-	if args.Term < rf.currentTerm { //Reply immediately if term < currentTerm
+	if args.Term < rf.currentTerm || args.LastIncludedIndex <rf.snapshotIndex{ //Reply immediately if term < currentTerm
 		return
 	}
 
@@ -220,6 +211,7 @@ func (rf *Raft) InstallSnapshot(args *InstallSnapshotArgs, reply *InstallSnapsho
 		rf.log = []LogEntry{{Term: args.LastIncludedTerm, Command: nil}}
 	}
 	//Save snapshot file, discard any existing or partial snapshot with a smaller index
+	rf.snapshotIndex = args.LastIncludedIndex
 	if rf.commitIndex < rf.snapshotIndex {
 		rf.commitIndex = rf.snapshotIndex
 	}
@@ -250,27 +242,27 @@ func (rf *Raft) CondInstallSnapshot(lastIncludedTerm int, lastIncludedIndex int,
 	// Your code here (2D).
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
-	if !rf.isNewer(lastIncludedTerm, lastIncludedIndex) { // older snapshots must be refused
+	/**if !rf.isNewer(lastIncludedTerm, lastIncludedIndex) { // older snapshots must be refused
 		return false
 	} //else it is recent
 	rf.lastIncludedTerm = lastIncludedTerm
 	rf.lastIncludedIndex = lastIncludedIndex
 	rf.commitIndex = lastIncludedIndex
 	rf.log = []LogEntry{}
-	rf.persister.SaveStateAndSnapshot(rf.encodeState(), snapshot)
+	rf.persister.SaveStateAndSnapshot(rf.encodeState(), snapshot)**/
 	return true
 }
 
 //helper method. given lastLogTerm and lastLogIndex it decides if it is a newer log
 func (rf *Raft) isNewer(lastLogTerm, lastLogIndex int) bool {
-	term := rf.lastIncludedTerm
+	/**term := rf.lastIncludedTerm
 	index := rf.lastIncludedIndex
 	if lastLogTerm > term {
 		return true
 	}
 	if lastLogTerm == term {
 		return lastLogIndex >= index
-	}
+	}**/
 	return false
 }
 
@@ -301,8 +293,8 @@ func (rf *Raft) installSnapshotToServer(server int) {
 	args := &InstallSnapshotArgs{
 		Term:              rf.currentTerm,
 		LeaderID:          rf.me,
-		LastIncludedIndex: rf.lastIncludedIndex,
-		LastIncludedTerm:  rf.lastIncludedTerm,
+		LastIncludedIndex: rf.snapshotIndex,
+		LastIncludedTerm:  rf.log[0].Term,
 		Data:              rf.persister.ReadSnapshot(),
 	}
 	rf.mu.Unlock()
@@ -398,7 +390,7 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 
 	//2B 
 	//Reply false if log doesn’t contain an entry at prevLogIndex whose term matches prevLogTerm
-		if len(rf.log) + rf.snapshotIndex <= args.PrevLogIndex { //If a follower does not have prevLogIndex in its log, it should return with conflictIndex = len(log) and conflictTerm = None.
+		if len(rf.log) + rf.snapshotIndex - 1 < args.PrevLogIndex { //If a follower does not have prevLogIndex in its log, it should return with conflictIndex = len(log) and conflictTerm = None.
 			reply.Success = false
 			reply.Term = rf.currentTerm
 			reply.ConflictIndex = len(rf.log) + rf.snapshotIndex
@@ -411,14 +403,16 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 			reply.Success = false
 			reply.Term = rf.currentTerm
 			reply.ConflictTerm = rf.log[args.PrevLogIndex - rf.snapshotIndex].Term // it unmatches leader's term
-			for i := args.PrevLogIndex - rf.lastIncludedIndex; i >= 0; i-- { //starts at PrevLogIndex and searches back
-				if rf.log[i].Term == reply.ConflictTerm {
-					reply.ConflictIndex = i
-				} else {
+			xIndex := args.PrevLogIndex
+		
+			for rf.log[xIndex-1-rf.snapshotIndex].Term == reply.ConflictTerm {
+				xIndex--
+				if xIndex == rf.snapshotIndex+1 {
 					break
 				}
 			}
-			return	
+			reply.ConflictIndex = xIndex
+			return
 		}
 
 	
@@ -428,7 +422,7 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 	conflictIdx := -1
 	for i := range args.Entries {
 		curr := args.PrevLogIndex + 1 + i
-		currReal := curr - rf.lastIncludedIndex
+		currReal := curr - rf.snapshotIndex
 		if currReal >= len(rf.log) || rf.log[currReal].Term != args.Entries[i].Term {
 			//rf.log = rf.log[:curr]
 			conflict = true
@@ -716,14 +710,14 @@ func (rf *Raft) broadcastHeartbeat() {
 					rf.matchIndex[server] = args.PrevLogIndex + len(args.Entries)
 
 					//If there exists an N such that N > commitIndex, a majority of matchIndex[i] ≥ N, and log[N].term == currentTerm: set commitIndex = N
-					for N := len(rf.log) - 1 + rf.lastIncludedIndex; N > rf.commitIndex; N-- {
+					for N := len(rf.log) - 1 + rf.snapshotIndex; N > rf.commitIndex; N-- {
 						count := 0
 						for _, matchIndex := range rf.matchIndex {
 							if matchIndex >= N {
 								count++
 							}
 						}
-						if count > len(rf.peers)/2 && rf.log[N].Term == rf.currentTerm {
+						if count > len(rf.peers)/2 && rf.log[N-rf.snapshotIndex].Term == rf.currentTerm {
 							rf.applyCommitted(N)
 						}
 					}
