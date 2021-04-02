@@ -143,8 +143,6 @@ func (rf *Raft) encodeState() []byte {
 	e.Encode(rf.votedFor)
 	e.Encode(rf.log)
 	e.Encode(rf.snapshotIndex)
-	e.Encode(rf.lastApplied)
-	e.Encode(rf.commitIndex)
 
 	data := w.Bytes()
 	return data
@@ -176,10 +174,8 @@ func (rf *Raft) readPersist(data []byte) {
 	var votedFor int
 	var log []LogEntry
 	var snapshotIndex int
-	var lastApplied int
-	var commitIndex int
 	if d.Decode(&currentTerm) != nil || d. Decode(&votedFor) != nil ||
-	   d.Decode(&log) != nil || d.Decode(&lastApplied) != nil ||  d.Decode(&commitIndex) != nil ||d.Decode(&snapshotIndex) != nil{
+	   d.Decode(&log) != nil || d.Decode(&snapshotIndex) != nil{
 	   //error...
 	   DPrintf("%v fails to read persist states", rf)
 	} else {
@@ -189,8 +185,6 @@ func (rf *Raft) readPersist(data []byte) {
 	   rf.votedFor = votedFor
 	   rf.log = log
 	   rf.snapshotIndex = snapshotIndex
-		rf.lastApplied = lastApplied
-		rf.commitIndex = commitIndex
 	}
 }
 
