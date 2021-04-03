@@ -29,7 +29,7 @@ import (
 )
 
 const (
-	HeartBeatInterval  = 120 * time.Millisecond
+	HeartBeatInterval  = 110 * time.Millisecond
 	ElectionInterval   = 150 * time.Millisecond
 	ElectionTimeoutMin = 300
 	ElectionTimeoutMax = 450
@@ -181,10 +181,20 @@ func (rf *Raft) readPersist(data []byte) {
 	} else {
 		rf.mu.Lock()
 		defer rf.mu.Unlock()
-	   rf.currentTerm = currentTerm
-	   rf.votedFor = votedFor
-	   rf.log = log
-	   rf.snapshotIndex = snapshotIndex
+		rf.currentTerm = currentTerm
+		rf.votedFor = votedFor
+		rf.log = log
+		rf.snapshotIndex = snapshotIndex
+
+		snapshotMsg := ApplyMsg {
+			CommandValid: false,
+			Command: rf.persister.ReadSnapshot(),
+		}
+	
+		go func() {
+			rf.applyCh <- snapshotMsg
+		}()
+	
 	}
 }
 
@@ -764,6 +774,7 @@ func (rf *Raft) applyCommitted(newCommitIndex int) {
 				var msg ApplyMsg
 				if entry.Command == nil {
 					msg.CommandValid = false
+					
 				} else {
 					msg.CommandValid = true
 				}
