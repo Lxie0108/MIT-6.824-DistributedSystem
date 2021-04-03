@@ -29,7 +29,7 @@ import (
 )
 
 const (
-	HeartBeatInterval  = 110 * time.Millisecond
+	HeartBeatInterval  = 100 * time.Millisecond
 	ElectionInterval   = 150 * time.Millisecond
 	ElectionTimeoutMin = 300
 	ElectionTimeoutMax = 450
