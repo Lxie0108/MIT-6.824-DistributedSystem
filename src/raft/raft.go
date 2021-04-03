@@ -185,16 +185,6 @@ func (rf *Raft) readPersist(data []byte) {
 		rf.votedFor = votedFor
 		rf.log = log
 		rf.snapshotIndex = snapshotIndex
-
-		snapshotMsg := ApplyMsg {
-			CommandValid: false,
-			Command: rf.persister.ReadSnapshot(),
-		}
-	
-		go func() {
-			rf.applyCh <- snapshotMsg
-		}()
-	
 	}
 }
 
@@ -774,7 +764,6 @@ func (rf *Raft) applyCommitted(newCommitIndex int) {
 				var msg ApplyMsg
 				if entry.Command == nil {
 					msg.CommandValid = false
-					
 				} else {
 					msg.CommandValid = true
 				}
