@@ -38,6 +38,8 @@ type KVServer struct {
 	maxraftstate int // snapshot if log grows this big
 
 	// Your definitions here.
+	db                   map[string]string
+	mapCh				 map[int] chan Op
 }
 
 func (kv *KVServer) Get(args *GetArgs, reply *GetReply) { //rpc handler
@@ -46,6 +48,15 @@ func (kv *KVServer) Get(args *GetArgs, reply *GetReply) { //rpc handler
 
 func (kv *KVServer) PutAppend(args *PutAppendArgs, reply *PutAppendReply) { //rpc handler
 	// Your code here. 
+}
+
+func (kv *KVServer) putIfAbsent(index int) chan Op {
+	kv.mu.Lock()
+	defer kv.mu.Unlock()
+	if _, ok := kv.mapCh[index]; !ok {
+		kv.mapCh[index] = make(chan Op, 1)
+	}
+	return kv.mapCh[index]
 }
 
 //
@@ -96,8 +107,30 @@ func StartKVServer(servers []*labrpc.ClientEnd, me int, persister *raft.Persiste
 
 	kv.applyCh = make(chan raft.ApplyMsg)
 	kv.rf = raft.Make(servers, me, persister, kv.applyCh)
+	kv.db = make(map[string]string)
+	kv.mapCh = make(map[int] chan Op)
 
 	// You may need initialization code here.
+
+	go func() {
+		for applyMsg := range kv.applyCh {
+			if applyMsg.CommandValid == false {
+				continue
+			}
+			op := applyMsg.Command.(Op)
+			kv.mu.Lock()
+			switch op.Type {
+			case "Put":
+				kv.db[op.Key] = op.Value
+			case "Append":
+				kv.db[op.Key] += op.Value
+			}
+			kv.mu.Unlock()
+			index := applyMsg.CommandIndex
+			channel := kv.putIfAbsent(index)
+			channel <- op
+		}
+	}()
 
 	return kv
 }

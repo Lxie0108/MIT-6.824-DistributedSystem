@@ -21,6 +21,7 @@ func MakeClerk(servers []*labrpc.ClientEnd) *Clerk {
 	ck := new(Clerk)
 	ck.servers = servers
 	// You'll have to add code here.
+	ck.lastleaderId = 0
 	return ck
 }
 
@@ -42,7 +43,7 @@ func (ck *Clerk) Get(key string) string {
 	i := ck.lastleaderId
 	for {
 		args := GetArgs {
-			Key: key
+			Key: key,
 		}
 		reply := GetReply{}
 		ok := ck.servers[i].Call("KVServer.Get", &args, &reply)
