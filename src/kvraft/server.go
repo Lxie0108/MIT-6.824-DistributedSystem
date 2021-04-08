@@ -23,6 +23,9 @@ type Op struct {//send to RAFT
 	// Your definitions here.
 	// Field names must start with capital letters,
 	// otherwise RPC will break.
+	Key string
+	Value string
+	Type string //such as Put/Append
 }
 
 type KVServer struct {
