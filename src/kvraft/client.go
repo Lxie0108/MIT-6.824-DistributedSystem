@@ -7,6 +7,7 @@ import "math/big"
 type Clerk struct {
 	servers []*labrpc.ClientEnd
 	// You will have to modify this struct.
+	lastleaderId int // remember which server turned out to be the leader for the last RPC
 }
 
 func nrand() int64 {
@@ -53,6 +54,22 @@ func (ck *Clerk) Get(key string) string {
 //
 func (ck *Clerk) PutAppend(key string, value string, op string) {
 	// You will have to modify this function.
+	i := ck.lastleaderId
+	for {
+		args := PutAppendArgs {
+			Key: key,
+			Value: value,
+			Op: op,
+		}
+		reply := PutAppendReply{}
+		ok := ck.servers[i].Call("KVServer.PutAppend", &args,&reply)
+		if ok { //request sent successfully
+			ck.lastleaderId = i
+			return
+		}
+		i = (i + 1) % len(ck.servers) //if not ok, keep looping, find the leader
+	}
+
 }
 
 func (ck *Clerk) Put(key string, value string) {
