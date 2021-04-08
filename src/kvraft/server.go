@@ -44,7 +44,21 @@ type KVServer struct {
 
 func (kv *KVServer) Get(args *GetArgs, reply *GetReply) { //rpc handler
 	// Your code here.
-
+	op1 := Op {
+        Type: "Get", 
+        Key: args.Key,
+        Value: "",
+    }
+    index,_,isLeader := kv.rf.Start(op1)
+    if !isLeader{
+        return
+    }
+    channel := kv.putIfAbsent(index)
+    op2 := <- channel
+    if op1.Key == op2.Key && op1.Value == op2.Value && op1.Type == op2.Type{
+        reply.Value = kv.db[op2.Key]
+        return
+    }
 }
 
 func (kv *KVServer) PutAppend(args *PutAppendArgs, reply *PutAppendReply) { //rpc handler
