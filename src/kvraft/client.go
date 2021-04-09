@@ -8,7 +8,7 @@ type Clerk struct {
 	servers []*labrpc.ClientEnd
 	// You will have to modify this struct.
 	lastleaderId int // remember which server turned out to be the leader for the last RPC
-	clientId int //client's unique identifier
+	clientId int64 //client's unique identifier
 	requestId int //record the number of times of requests. If a client re-send the same request, requestId stays the same. Else +1.
 }
 
@@ -25,7 +25,6 @@ func MakeClerk(servers []*labrpc.ClientEnd) *Clerk {
 	// You'll have to add code here.
 	ck.lastleaderId = 0
 	ck.clientId = nrand() //random generated unique id.
-	ck.requestId = 0
 	return ck
 }
 
@@ -82,7 +81,7 @@ func (ck *Clerk) PutAppend(key string, value string, op string) {
 			ClientId: ck.clientId,
 			RequestId: ck.requestId,
 		}
-		ck.RequestId++
+		ck.requestId++
 		reply := PutAppendReply{}
 		ok := ck.servers[i].Call("KVServer.PutAppend", &args, &reply)
 		if ok && reply.IsLeader { //request sent successfully

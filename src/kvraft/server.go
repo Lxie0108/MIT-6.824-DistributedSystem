@@ -26,6 +26,8 @@ type Op struct {//send to RAFT
 	Key string
 	Value string
 	Type string //such as Put/Append
+	ClientId int64
+	RequestId int
 }
 
 type KVServer struct {
@@ -40,6 +42,7 @@ type KVServer struct {
 	// Your definitions here.
 	db                   map[string]string
 	mapCh				 map[int] chan Op
+	mapRequest 			 map[int64]int
 }
 
 func (kv *KVServer) Get(args *GetArgs, reply *GetReply) { //rpc handler
@@ -71,6 +74,8 @@ func (kv *KVServer) PutAppend(args *PutAppendArgs, reply *PutAppendReply) { //rp
         Type: args.Op, 
         Key: args.Key,
         Value: args.Value,
+		ClientId: args.ClientId,
+		RequestId: args.RequestId,
     }
 	reply.IsLeader = false
     index,_,isLeader := kv.rf.Start(op1)
@@ -144,6 +149,7 @@ func StartKVServer(servers []*labrpc.ClientEnd, me int, persister *raft.Persiste
 	kv.rf = raft.Make(servers, me, persister, kv.applyCh)
 	kv.db = make(map[string]string)
 	kv.mapCh = make(map[int] chan Op)
+	kv.mapRequest = make(map[int64]int)
 
 	// You may need initialization code here.
 
@@ -154,11 +160,15 @@ func StartKVServer(servers []*labrpc.ClientEnd, me int, persister *raft.Persiste
 			}
 			op := applyMsg.Command.(Op)
 			kv.mu.Lock()
-			switch op.Type {
-			case "Put":
-				kv.db[op.Key] = op.Value
-			case "Append":
-				kv.db[op.Key] += op.Value
+			idRequest, ok := kv.mapRequest[op.ClientId]
+			if !ok || op.RequestId > idRequest {
+				switch op.Type {
+				case "Put":
+					kv.db[op.Key] = op.Value
+				case "Append":
+					kv.db[op.Key] += op.Value
+				}
+				kv.mapRequest[op.ClientId] = op.RequestId
 			}
 			kv.mu.Unlock()
 			index := applyMsg.CommandIndex
