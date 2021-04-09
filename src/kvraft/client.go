@@ -23,7 +23,6 @@ func MakeClerk(servers []*labrpc.ClientEnd) *Clerk {
 	ck := new(Clerk)
 	ck.servers = servers
 	// You'll have to add code here.
-	ck.lastleaderId = 0
 	ck.clientId = nrand() //random generated unique id.
 	return ck
 }
@@ -44,14 +43,18 @@ func (ck *Clerk) Get(key string) string {
 
 	// You will have to modify this function.
 	i := ck.lastleaderId
+	idRequest := ck.requestId + 1
 	for {
 		args := GetArgs {
 			Key: key,
+			ClientId: ck.clientId,
+			RequestId: idRequest,
 		}
 		reply := GetReply{}
 		ok := ck.servers[i].Call("KVServer.Get", &args, &reply)
 		if ok && reply.IsLeader{ //request sent successfully
 			ck.lastleaderId = i
+			ck.requestId = idRequest
 			return reply.Value
 		}
 		i = (i + 1) % len(ck.servers) //if not ok, keep looping, find the leader
@@ -73,19 +76,20 @@ func (ck *Clerk) Get(key string) string {
 func (ck *Clerk) PutAppend(key string, value string, op string) {
 	// You will have to modify this function.
 	i := ck.lastleaderId
+	idRequest := ck.requestId + 1
 	for {
 		args := PutAppendArgs {
 			Key: key,
 			Value: value,
 			Op: op,
 			ClientId: ck.clientId,
-			RequestId: ck.requestId,
+			RequestId: idRequest,
 		}
-		ck.requestId++
 		reply := PutAppendReply{}
 		ok := ck.servers[i].Call("KVServer.PutAppend", &args, &reply)
 		if ok && reply.IsLeader { //request sent successfully
 			ck.lastleaderId = i
+			ck.requestId = idRequest
 			return
 		}
 		i = (i + 1) % len(ck.servers) //if not ok, keep looping, find the leader
