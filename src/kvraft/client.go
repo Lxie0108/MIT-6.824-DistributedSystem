@@ -79,7 +79,10 @@ func (ck *Clerk) PutAppend(key string, value string, op string) {
 			Key: key,
 			Value: value,
 			Op: op,
+			ClientId: ck.clientId,
+			RequestId: ck.requestId,
 		}
+		ck.RequestId++
 		reply := PutAppendReply{}
 		ok := ck.servers[i].Call("KVServer.PutAppend", &args, &reply)
 		if ok && reply.IsLeader { //request sent successfully
