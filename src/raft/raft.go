@@ -365,6 +365,7 @@ type LogEntry struct {
 func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply) {
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
+	defer rf.persist()
 	if args.Term < rf.currentTerm { //Reply false if term < currentTerm (§5.1)
 		reply.Success = false
 		reply.Term = rf.currentTerm
@@ -375,7 +376,6 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 		reply.Success = true
 		rf.currentTerm = args.Term
 		rf.convertTo("Follower")
-		rf.persist()
 	}
 
 	rf.electionTimer.Reset(rf.getRandomDuration())
@@ -435,7 +435,6 @@ func (rf *Raft) AppendEntries(args *AppendEntriesArgs, reply *AppendEntriesReply
 	if conflict {
 		rf.log = rf.log[:args.PrevLogIndex+1+conflictIdx-rf.snapshotIndex] //delete the conflict entries
 		rf.log = append(rf.log, args.Entries[conflictIdx:]...) //append with leader's
-		rf.persist()
 	}
 
 	//If leaderCommit > commitIndex, set commitIndex = min(leaderCommit, index of last new entry)
@@ -457,6 +456,7 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 	// Your code here (2A, 2B).
 	rf.mu.Lock()
 	defer rf.mu.Unlock()
+	defer rf.persist()
 
 	if args.Term < rf.currentTerm || (args.Term == rf.currentTerm && rf.votedFor != -1 && rf.votedFor != args.CandidateId) {
 		reply.Term = rf.currentTerm
@@ -466,7 +466,6 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 	if args.Term > rf.currentTerm {
 		rf.currentTerm = args.Term
 		rf.convertTo("Follower")
-		rf.persist()
 	}
 	//If votedFor is null or candidateId, and candidate’s log is at least as up-to-date as receiver’s log, grant vote
 	if (rf.votedFor != -1 || rf.votedFor != args.CandidateId) && (args.LastLogTerm < rf.log[len(rf.log)-1].Term || (args.LastLogTerm == rf.log[len(rf.log)-1].Term && args.LastLogIndex < len(rf.log)-1 + rf.snapshotIndex)) {
@@ -475,7 +474,6 @@ func (rf *Raft) RequestVote(args *RequestVoteArgs, reply *RequestVoteReply) {
 		return
 	}
 	rf.votedFor = args.CandidateId
-	rf.persist()
 	reply.VoteGranted = true
 	rf.electionTimer.Reset(rf.getRandomDuration())
 }
@@ -591,6 +589,7 @@ func (rf *Raft) Start(command interface{}) (int, int, bool) {
 		rf.nextIndex[rf.me] = index + 1
 		rf.matchIndex[rf.me] = index
 		rf.persist()
+		rf.broadcastHeartbeat()
 		rf.mu.Unlock()
 	}
 	return index, term, isLeader
@@ -628,9 +627,9 @@ func (rf *Raft) killed() bool {
 follower
 • If election timeout elapses: start new election**/
 func (rf *Raft) doElection() {
+	defer rf.persist()
 	rf.currentTerm++
 	rf.votedFor = rf.me
-	rf.persist()
 	nVotes := 1
 	rf.electionTimer.Reset(rf.getRandomDuration())
 	args := RequestVoteArgs{
