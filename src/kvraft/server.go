@@ -49,6 +49,7 @@ func (kv *KVServer) Get(args *GetArgs, reply *GetReply) { //rpc handler
         Key: args.Key,
         Value: "",
     }
+	reply.IsLeader = false
     index,_,isLeader := kv.rf.Start(op1)
     if !isLeader{
         return
@@ -56,6 +57,7 @@ func (kv *KVServer) Get(args *GetArgs, reply *GetReply) { //rpc handler
     channel := kv.putIfAbsent(index)
     op2 := <- channel
     if op1.Key == op2.Key && op1.Value == op2.Value && op1.Type == op2.Type{
+		reply.IsLeader = true
         reply.Value = kv.db[op2.Key]
         return
     }
@@ -68,27 +70,17 @@ func (kv *KVServer) PutAppend(args *PutAppendArgs, reply *PutAppendReply) { //rp
         Key: args.Key,
         Value: args.Value,
     }
+	reply.IsLeader = false
     index,_,isLeader := kv.rf.Start(op1)
     if !isLeader{
          return
-    }
-    channel := kv.putIfAbsent(index)
-    op2 := <- channel
-	op1 := Op {
-    	Type: args.Op, 
-        Key: args.Key,
-        Value: args.Value,
-    }
-    index,_,isLeader := kv.rf.Start(op1)
-    if !isLeader{
-        return
     }
     channel := kv.putIfAbsent(index)
     op2 := <- channel
     if op1.Key == op2.Key && op1.Value == op2.Value && op1.Type == op2.Type {
+		reply.IsLeader = true
          return
     }
-
 }
 
 func (kv *KVServer) putIfAbsent(index int) chan Op {

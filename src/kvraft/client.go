@@ -47,7 +47,7 @@ func (ck *Clerk) Get(key string) string {
 		}
 		reply := GetReply{}
 		ok := ck.servers[i].Call("KVServer.Get", &args, &reply)
-		if ok { //request sent successfully
+		if ok && reply.IsLeader{ //request sent successfully
 			ck.lastleaderId = i
 			return reply.Value
 		}
@@ -78,7 +78,7 @@ func (ck *Clerk) PutAppend(key string, value string, op string) {
 		}
 		reply := PutAppendReply{}
 		ok := ck.servers[i].Call("KVServer.PutAppend", &args, &reply)
-		if ok { //request sent successfully
+		if ok && reply.IsLeader { //request sent successfully
 			ck.lastleaderId = i
 			return
 		}
