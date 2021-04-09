@@ -8,6 +8,8 @@ type Clerk struct {
 	servers []*labrpc.ClientEnd
 	// You will have to modify this struct.
 	lastleaderId int // remember which server turned out to be the leader for the last RPC
+	clientId int //client's unique identifier
+	requestId int //record the number of times of requests. If a client re-send the same request, requestId stays the same. Else +1.
 }
 
 func nrand() int64 {
@@ -22,6 +24,8 @@ func MakeClerk(servers []*labrpc.ClientEnd) *Clerk {
 	ck.servers = servers
 	// You'll have to add code here.
 	ck.lastleaderId = 0
+	ck.clientId = nrand() //random generated unique id.
+	ck.requestId = 0
 	return ck
 }
 
