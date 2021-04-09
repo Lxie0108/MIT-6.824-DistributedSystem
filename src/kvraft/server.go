@@ -56,9 +56,11 @@ func (kv *KVServer) Get(args *GetArgs, reply *GetReply) { //rpc handler
     }
     channel := kv.putIfAbsent(index)
     op2 := <- channel
-    if op1.Key == op2.Key && op1.Value == op2.Value && op1.Type == op2.Type{
+    if op1.Key == op2.Key && op1.Value == op2.Value && op1.Type == op2.Type {
 		reply.IsLeader = true
+		kv.mu.Lock()
         reply.Value = kv.db[op2.Key]
+		kv.mu.Unlock()
         return
     }
 }
