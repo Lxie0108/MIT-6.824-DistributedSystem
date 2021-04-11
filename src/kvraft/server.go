@@ -187,5 +187,6 @@ func StartKVServer(servers []*labrpc.ClientEnd, me int, persister *raft.Persiste
 			channel <- op
 		}
 	}()
+	
 	return kv
 }
