@@ -4,6 +4,7 @@ import (
 	"log"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"6.824/labgob"
 	"6.824/labrpc"
@@ -58,7 +59,7 @@ func (kv *KVServer) Get(args *GetArgs, reply *GetReply) { //rpc handler
         return
     }
     channel := kv.putIfAbsent(index)
-    op2 := <- channel
+    op2 := kv.waitCommitting(channel)
     if op1.Key == op2.Key && op1.Value == op2.Value && op1.Type == op2.Type {
 		reply.IsLeader = true
 		kv.mu.Lock()
@@ -83,7 +84,7 @@ func (kv *KVServer) PutAppend(args *PutAppendArgs, reply *PutAppendReply) { //rp
          return
     }
     channel := kv.putIfAbsent(index)
-    op2 := <- channel
+    op2 := kv.waitCommitting(channel)
     if op1.Key == op2.Key && op1.Value == op2.Value && op1.Type == op2.Type {
 		reply.IsLeader = true
          return
@@ -97,6 +98,15 @@ func (kv *KVServer) putIfAbsent(index int) chan Op {
 		kv.mapCh[index] = make(chan Op, 1)
 	}
 	return kv.mapCh[index]
+}
+
+func (kv *KVServer) waitCommitting(channel chan Op) Op {
+	select {
+	case op2 := <- channel:
+		return op2
+	case <- time.After(500*time.Millisecond):
+		return Op{}
+	}
 }
 
 //
