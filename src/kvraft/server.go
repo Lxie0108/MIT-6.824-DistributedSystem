@@ -43,7 +43,7 @@ type KVServer struct {
 	// Your definitions here.
 	db                   map[string]string
 	mapCh				 map[int] chan Op
-	mapRequest 			 map[int64]int
+	mapRequest 			 map[int64]int //clientId to requestId
 }
 
 func (kv *KVServer) Get(args *GetArgs, reply *GetReply) { //rpc handler
@@ -60,7 +60,7 @@ func (kv *KVServer) Get(args *GetArgs, reply *GetReply) { //rpc handler
     }
     channel := kv.putIfAbsent(index)
     op2 := kv.waitCommitting(channel)
-    if op1.Key == op2.Key && op1.Value == op2.Value && op1.Type == op2.Type {
+    if op1.Key == op2.Key && op1.Value == op2.Value && op1.Type == op2.Type {//if not equal, it indicates that a the client's operation has failed
 		reply.IsLeader = true
 		kv.mu.Lock()
         reply.Value = kv.db[op2.Key]
@@ -100,6 +100,7 @@ func (kv *KVServer) putIfAbsent(index int) chan Op {
 	return kv.mapCh[index]
 }
 
+//added timeout logic so that client does not get blocked when raft leader can't commit/
 func (kv *KVServer) waitCommitting(channel chan Op) Op {
 	select {
 	case op2 := <- channel:
@@ -159,10 +160,10 @@ func StartKVServer(servers []*labrpc.ClientEnd, me int, persister *raft.Persiste
 	kv.rf = raft.Make(servers, me, persister, kv.applyCh)
 	kv.db = make(map[string]string)
 	kv.mapCh = make(map[int] chan Op)
-	kv.mapRequest = make(map[int64]int)
+	kv.mapRequest = make(map[int64]int) 
 
 	// You may need initialization code here.
-
+	// This goroutine reads the ApplyMsg from applyCh, and execute. After execution, it notifies the op handler.
 	go func() {
 		for applyMsg := range kv.applyCh {
 			if applyMsg.CommandValid == false {

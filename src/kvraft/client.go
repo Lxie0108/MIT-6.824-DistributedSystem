@@ -9,7 +9,8 @@ type Clerk struct {
 	// You will have to modify this struct.
 	lastleaderId int // remember which server turned out to be the leader for the last RPC
 	clientId int64 //client's unique identifier
-	requestId int //record the number of times of requests. If a client re-send the same request, requestId stays the same. Else +1.
+	requestId int //record the number of times of requests. If a client re-send the same request, requestId stays the same. Else +1. 
+				//it ensures that every request is executed just once.
 }
 
 func nrand() int64 {
