@@ -60,7 +60,7 @@ func (kv *KVServer) Get(args *GetArgs, reply *GetReply) { //rpc handler
     }
     channel := kv.putIfAbsent(index)
     op2 := kv.waitCommitting(channel)
-    if op1.Key == op2.Key && op1.Value == op2.Value && op1.Type == op2.Type {//if not equal, it indicates that a the client's operation has failed
+    if op1.Key == op2.Key && op1.Value == op2.Value && op1.Type == op2.Type && op1.ClientId == op2.ClientId && op1.RequestId == op2.RequestId {//if not equal, it indicates that a the client's operation has failed
 		reply.IsLeader = true
 		kv.mu.Lock()
         reply.Value = kv.db[op2.Key]
@@ -85,7 +85,7 @@ func (kv *KVServer) PutAppend(args *PutAppendArgs, reply *PutAppendReply) { //rp
     }
     channel := kv.putIfAbsent(index)
     op2 := kv.waitCommitting(channel)
-    if op1.Key == op2.Key && op1.Value == op2.Value && op1.Type == op2.Type {
+    if op1.Key == op2.Key && op1.Value == op2.Value && op1.Type == op2.Type && op1.ClientId == op2.ClientId && op1.RequestId == op2.RequestId {
 		reply.IsLeader = true
          return
     }
