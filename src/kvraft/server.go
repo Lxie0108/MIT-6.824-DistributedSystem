@@ -218,9 +218,6 @@ func StartKVServer(servers []*labrpc.ClientEnd, me int, persister *raft.Persiste
 	go func() {
 		for applyMsg := range kv.applyCh {
 			if applyMsg.CommandValid == false {
-				continue
-			}
-			if !applyMsg.CommandValid {
 				kv.readSnapshot(applyMsg.Snapshot)
 				continue
 			}
