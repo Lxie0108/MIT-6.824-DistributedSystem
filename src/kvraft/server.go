@@ -153,9 +153,10 @@ func (kv *KVServer) readSnapshot(snapshot []byte){
 		kv.mapRequest = mapRequest
 	}
 }
-
+/** determines if the persisted Raft state grows too big.
+**/
 func (kv *KVServer) requireTrimming() bool{
-	if kv.maxraftstate == -1 {
+	if kv.maxraftstate == -1 { //If maxraftstate is -1, you do not have to snapshot. 
 		return false
 	}
 	if kv.rf.GetRaftStateSize() >= kv.maxraftstate {
@@ -164,8 +165,16 @@ func (kv *KVServer) requireTrimming() bool{
 	return false
 }
 
-func (kv *KVServer) snapshot(){
-
+/**encode states and then call raft.Snapshot()
+**/
+func (kv *KVServer) snapshot(int index){
+	w := new(bytes.Buffer)
+	e := labgob.NewEncoder(w)
+	kv.mu.Lock()
+	e.Encode(kv.db)
+	e.Encode(kv.mapRequest)
+	kv.mu.Unlock()
+	kv.rf.Snapshot(index, w.Bytes())
 }
 
 
@@ -226,6 +235,9 @@ func StartKVServer(servers []*labrpc.ClientEnd, me int, persister *raft.Persiste
 			index := applyMsg.CommandIndex
 			channel := kv.putIfAbsent(index)
 			channel <- op
+			if kv.requireTrimming(){
+				kv.snapshot(index)
+			}
 		}
 	}()
 	
