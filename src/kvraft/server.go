@@ -220,6 +220,10 @@ func StartKVServer(servers []*labrpc.ClientEnd, me int, persister *raft.Persiste
 			if applyMsg.CommandValid == false {
 				continue
 			}
+			if !applyMsg.CommandValid {
+				kv.readSnapshot(applyMsg.Snapshot)
+				continue
+			}
 			op := applyMsg.Command.(Op)
 			kv.mu.Lock()
 			idRequest, ok := kv.mapRequest[op.ClientId]
