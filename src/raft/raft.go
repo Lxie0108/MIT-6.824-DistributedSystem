@@ -185,6 +185,8 @@ func (rf *Raft) readPersist(data []byte) {
 		rf.votedFor = votedFor
 		rf.log = log
 		rf.snapshotIndex = snapshotIndex
+		rf.commitIndex = snapshotIndex
+		rf.lastApplied = snapshotIndex
 	}
 }
 

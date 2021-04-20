@@ -3,6 +3,7 @@ package kvraft
 import (
 	"log"
 	"sync"
+	"bytes"
 	"sync/atomic"
 	"time"
 
@@ -147,8 +148,8 @@ func (kv *KVServer) readSnapshot(snapshot []byte){
 	   //error...
 	   DPrintf("%v fails to read Snapshot", kv.me)
 	} else {
-		rf.mu.Lock()
-		defer rf.mu.Unlock()
+		kv.mu.Lock()
+		defer kv.mu.Unlock()
 		kv.db = db
 		kv.mapRequest = mapRequest
 	}
@@ -167,7 +168,7 @@ func (kv *KVServer) requireTrimming() bool{
 
 /**encode states and then call raft.Snapshot()
 **/
-func (kv *KVServer) snapshot(int index){
+func (kv *KVServer) snapshot(index int){
 	w := new(bytes.Buffer)
 	e := labgob.NewEncoder(w)
 	kv.mu.Lock()
@@ -236,7 +237,7 @@ func StartKVServer(servers []*labrpc.ClientEnd, me int, persister *raft.Persiste
 			channel := kv.putIfAbsent(index)
 			channel <- op
 			if kv.requireTrimming(){
-				kv.snapshot(index)
+				go kv.snapshot(index)
 			}
 		}
 	}()
