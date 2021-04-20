@@ -133,6 +133,37 @@ func (kv *KVServer) killed() bool {
 	return z == 1
 }
 
+/** read snapshot to restore previous persistd states.
+**/
+func (kv *KVServer) readSnapshot(snapshot []byte){
+	if snapshot == nil {
+		return
+	}
+	r := bytes.NewBuffer(snapshot)
+	d := labgob.NewDecoder(r)
+	var db map[string]string
+	var mapRequest map[int64]int
+	if d.Decode(&db) != nil || d. Decode(&mapRequest) != nil {
+	   //error...
+	   DPrintf("%v fails to read Snapshot", kv.me)
+	} else {
+		rf.mu.Lock()
+		defer rf.mu.Unlock()
+		kv.db = db
+		kv.mapRequest = mapRequest
+	}
+}
+
+func (kv *KVServer) requireTrimming() bool{
+
+}
+
+func (kv *KVServer) snapshot(){
+
+}
+
+
+
 //
 // servers[] contains the ports of the set of
 // servers that will cooperate via Raft to
@@ -164,6 +195,7 @@ func StartKVServer(servers []*labrpc.ClientEnd, me int, persister *raft.Persiste
 	kv.db = make(map[string]string)
 	kv.mapCh = make(map[int] chan Op)
 	kv.mapRequest = make(map[int64]int) 
+	kv.readSnapshot(kv.persist.ReadSnapshot())//restore the snapshot from persister
 
 	// You may need initialization code here.
 	// This goroutine reads the ApplyMsg from applyCh, and execute. After execution, it notifies the op handler.
