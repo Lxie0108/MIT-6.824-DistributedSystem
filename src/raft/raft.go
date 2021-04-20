@@ -188,6 +188,10 @@ func (rf *Raft) readPersist(data []byte) {
 	}
 }
 
+func (rf *Raft) GetRaftStateSize() int {
+	return rf.persister.RaftStateSize()
+}
+
 //Raft leaders must sometimes tell lagging Raft peers to update their state by installing a snapshot. 
 //You need to implement InstallSnapshot RPC senders and handlers for installing snapshots when this situation arises. 
 //This is in contrast to AppendEntries, which sends log entries that are then applied one by one by the service

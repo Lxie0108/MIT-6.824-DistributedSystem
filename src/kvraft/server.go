@@ -155,7 +155,13 @@ func (kv *KVServer) readSnapshot(snapshot []byte){
 }
 
 func (kv *KVServer) requireTrimming() bool{
-
+	if kv.maxraftstate == -1 {
+		return false
+	}
+	if kv.rf.GetRaftStateSize() >= kv.maxraftstate {
+		return true
+	}
+	return false
 }
 
 func (kv *KVServer) snapshot(){
