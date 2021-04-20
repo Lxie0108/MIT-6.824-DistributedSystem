@@ -44,6 +44,8 @@ type KVServer struct {
 	db                   map[string]string
 	mapCh				 map[int] chan Op
 	mapRequest 			 map[int64]int //clientId to requestId
+	persist  			 *raft.Persister
+
 }
 
 func (kv *KVServer) Get(args *GetArgs, reply *GetReply) { //rpc handler
@@ -153,6 +155,7 @@ func StartKVServer(servers []*labrpc.ClientEnd, me int, persister *raft.Persiste
 	kv := new(KVServer)
 	kv.me = me
 	kv.maxraftstate = maxraftstate
+	kv.persist = persister
 
 	// You may need initialization code here.
 
