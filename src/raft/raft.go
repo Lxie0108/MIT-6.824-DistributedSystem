@@ -218,7 +218,7 @@ func (rf *Raft) InstallSnapshot(args *InstallSnapshotArgs, reply *InstallSnapsho
 		rf.log = []LogEntry{{Term: args.LastIncludedTerm, Command: nil}}
 	}
 	//Save snapshot file, discard any existing or partial snapshot with a smaller index
-	rf.snapshotIndex = args.LastIncludedIndex	
+	rf.snapshotIndex = args.LastIncludedIndex
 	rf.commitIndex = rf.snapshotIndex
 	rf.lastApplied = rf.snapshotIndex
 	rf.persister.SaveStateAndSnapshot(rf.encodeState(), args.Data)
@@ -759,6 +759,7 @@ func (rf *Raft) broadcastHeartbeat() {
 func (rf *Raft) applyCommitted(newCommitIndex int) {
 	//If commitIndex > lastApplied: increment lastApplied, apply log[lastApplied] to state machine (§5.3)
 	rf.commitIndex = newCommitIndex
+
 	if rf.commitIndex > rf.lastApplied {
 		startIndex := rf.lastApplied + 1 - rf.snapshotIndex
 		endIndex := rf.commitIndex + 1 - rf.snapshotIndex
@@ -775,7 +776,9 @@ func (rf *Raft) applyCommitted(newCommitIndex int) {
 				msg.CommandIndex = start + i
 				rf.applyCh <- msg
 				rf.mu.Lock()
-				rf.lastApplied = msg.CommandIndex
+				if rf.lastApplied < msg.CommandIndex {//For 3B, the condition makes sure that the CommandIndex of the slower gorountine does not replace the lastApplied of the faster goroutine
+					rf.lastApplied = msg.CommandIndex
+				}
 				rf.mu.Unlock()
 			}
 		}(rf.lastApplied+1, entries)
