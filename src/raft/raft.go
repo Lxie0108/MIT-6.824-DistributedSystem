@@ -185,8 +185,10 @@ func (rf *Raft) readPersist(data []byte) {
 		rf.votedFor = votedFor
 		rf.log = log
 		rf.snapshotIndex = snapshotIndex
-		rf.commitIndex = snapshotIndex
-		rf.lastApplied = snapshotIndex
+		if snapshotIndex != 0 {
+			rf.commitIndex = snapshotIndex
+			rf.lastApplied = snapshotIndex
+		}
 	}
 }
 
@@ -595,7 +597,6 @@ func (rf *Raft) Start(command interface{}) (int, int, bool) {
 		rf.nextIndex[rf.me] = index + 1
 		rf.matchIndex[rf.me] = index
 		rf.persist()
-		rf.broadcastHeartbeat()
 		rf.mu.Unlock()
 	}
 	return index, term, isLeader

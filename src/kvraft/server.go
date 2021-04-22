@@ -235,11 +235,8 @@ func StartKVServer(servers []*labrpc.ClientEnd, me int, persister *raft.Persiste
 			}
 			kv.mu.Unlock()
 			index := applyMsg.CommandIndex
-			if kv.me == 0 {log.Println("channel",index)}
 			channel := kv.putIfAbsent(index)
-			if kv.me == 0 {log.Println("will send channel",index, kv.me)}
 			channel <- op
-			if kv.me == 0 {log.Println("has sent channel",index)}
 			if kv.requireTrimming(){
 				go kv.snapshot(index)// kv.snapshot uses lock from raft. Create goroutine to prevent blocking applyCh.
 			}
