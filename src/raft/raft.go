@@ -677,15 +677,16 @@ send initial empty AppendEntries RPCs
 (heartbeat) to each server; repeat during idle periods to
 prevent election timeouts (§5.2)**/
 func (rf *Raft) broadcastHeartbeat() {
-	if rf.state != "Leader" {
-		return
-	}
 	for i := 0; i < len(rf.peers); i++ {
 		if i == rf.me {
 			continue
 		}
 		go func(server int) {
 			rf.mu.Lock()
+			if rf.state != "Leader" {
+				rf.mu.Unlock()
+				return
+			}
 			prev := rf.nextIndex[server] - 1 // PreviousLogIndex should be index of log entry immediately preceding new ones.
 			//It should be the last index that Follower has been update-to-date with the leader, therefore, it is nextIndex[Follower] - 1.	
 			

@@ -238,7 +238,7 @@ func StartKVServer(servers []*labrpc.ClientEnd, me int, persister *raft.Persiste
 			channel := kv.putIfAbsent(index)
 			channel <- op
 			if kv.requireTrimming(){
-				go kv.snapshot(index)
+				kv.snapshot(index)
 			}
 		}
 	}()
