@@ -238,7 +238,7 @@ func StartKVServer(servers []*labrpc.ClientEnd, me int, persister *raft.Persiste
 			channel := kv.putIfAbsent(index)
 			channel <- op
 			if kv.requireTrimming(){
-				kv.snapshot(index)
+				go kv.snapshot(index)// Creates goroutine here to prevent blocking applyCh.
 			}
 		}
 	}()
