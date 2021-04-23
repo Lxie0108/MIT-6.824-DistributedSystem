@@ -166,7 +166,7 @@ func (kv *KVServer) requireTrimming() bool{
 	return false
 }
 
-/**encode states and then call raft.Snapshot()
+/**encode the database and the map for clientId and RequestId to a snapshot and then call rf.Snapshot.
 **/
 func (kv *KVServer) snapshot(index int){
 	w := new(bytes.Buffer)
