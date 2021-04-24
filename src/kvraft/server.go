@@ -176,6 +176,7 @@ func (kv *KVServer) snapshot(index int){
 	e.Encode(kv.mapRequest)
 	kv.mu.Unlock()
 	kv.rf.Snapshot(index, w.Bytes())
+	
 }
 
 
