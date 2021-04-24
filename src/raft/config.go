@@ -95,12 +95,12 @@ func make_config(t *testing.T, n int, unreliable bool, snapshot bool) *config {
 	if snapshot {
 		applier = cfg.applierSnap
 	}
-	// create a full set of Rafts.
 	for i := 0; i < cfg.n; i++ {
 		cfg.logs[i] = map[int]logEntry{}
+	}
+	for i := 0; i < cfg.n; i++ {
 		cfg.start1(i, applier)
 	}
-
 	// connect everyone
 	for i := 0; i < cfg.n; i++ {
 		cfg.connect(i)
@@ -128,7 +128,7 @@ func (cfg *config) crash1(i int) {
 	rf := cfg.rafts[i]
 	if rf != nil {
 		cfg.mu.Unlock()
-		cfg.stopCh[i] <- struct{}{}
+		close(cfg.stopCh[i])
 		rf.Kill()
 		cfg.mu.Lock()
 		cfg.rafts[i] = nil
@@ -181,17 +181,19 @@ func (cfg *config) apply(server int, m ApplyMsg) {
 // applier reads message from apply ch and checks that they match the log
 // contents
 func (cfg *config) applier(server int, applyCh chan ApplyMsg, stopCh <-chan struct{}) {
-	stopped := false
 	for {
 		select {
 		case <-stopCh:
 			{
 				// When applier is stopped, it still continues to empty `applyCh`.
-				stopped = true
+				stopCh = nil
 			}
-		case m := <-applyCh:
+		case m, ok := <-applyCh:
 			{
-				if !stopped {
+				if !ok {
+					return
+				}
+				if stopCh != nil {
 					cfg.apply(server, m)
 				}
 			}
@@ -270,17 +272,19 @@ func (cfg *config) applySnap(server int, m ApplyMsg) {
 
 // periodically snapshot raft state
 func (cfg *config) applierSnap(server int, applyCh chan ApplyMsg, stopCh <-chan struct{}) {
-	stopped := false
 	for {
 		select {
 		case <-stopCh:
 			{
 				// When applier is stopped, it still continues to empty `applyCh`.
-				stopped = true
+				stopCh = nil
 			}
-		case m := <-applyCh:
+		case m, ok := <-applyCh:
 			{
-				if !stopped {
+				if !ok {
+					return
+				}
+				if stopCh != nil {
 					cfg.applySnap(server, m)
 				}
 			}
@@ -329,14 +333,14 @@ func (cfg *config) start1(i int, applier func(int, chan ApplyMsg, <-chan struct{
 	cfg.mu.Unlock()
 
 	applyCh := make(chan ApplyMsg)
+	cfg.stopCh[i] = make(chan struct{})
+	go applier(i, applyCh, cfg.stopCh[i])
+
 	rf := Make(ends, i, cfg.saved[i], applyCh)
 
 	cfg.mu.Lock()
 	cfg.rafts[i] = rf
 	cfg.mu.Unlock()
-
-	cfg.stopCh[i] = make(chan struct{})
-	go applier(i, applyCh, cfg.stopCh[i])
 
 	svc := labrpc.MakeService(rf)
 	srv := labrpc.MakeServer()
