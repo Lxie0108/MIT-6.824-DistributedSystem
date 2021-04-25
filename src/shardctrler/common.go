@@ -44,7 +44,7 @@ type JoinReply struct {
 }
 
 type LeaveArgs struct {
-	GIDs []int
+	GIDs []int // GID leaving and new config assigns those groups' shards to the remaining groups
 }
 
 type LeaveReply struct {
@@ -52,8 +52,8 @@ type LeaveReply struct {
 	Err         Err
 }
 
-type MoveArgs struct {
-	Shard int
+type MoveArgs struct { //assign shard to gid
+	Shard int //shard -> gid ?
 	GID   int
 }
 
@@ -69,5 +69,5 @@ type QueryArgs struct {
 type QueryReply struct {
 	WrongLeader bool
 	Err         Err
-	Config      Config
+	Config      Config //latest configuration.
 }
