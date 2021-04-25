@@ -16,11 +16,16 @@ type ShardCtrler struct {
 	// Your data here.
 
 	configs []Config // indexed by config num
+	mapCh				 map[int] chan Op
+	mapRequest 			 map[int64]int //clientId to requestId
 }
 
 
 type Op struct {
 	// Your data here.
+	Type string //such as Put/Append
+	ClientId int64
+	RequestId int
 }
 
 
@@ -57,6 +62,15 @@ func (sc *ShardCtrler) Raft() *raft.Raft {
 	return sc.rf
 }
 
+func (sc *ShardCtrler) putIfAbsent(index int) chan Op {
+	sc.mu.Lock()
+	defer sc.mu.Unlock()
+	if _, ok := sc.mapCh[index]; !ok {
+		sc.mapCh[index] = make(chan Op, 1)
+	}
+	return sc.mapCh[index]
+}
+
 //
 // servers[] contains the ports of the set of
 // servers that will cooperate via Raft to
@@ -75,6 +89,35 @@ func StartServer(servers []*labrpc.ClientEnd, me int, persister *raft.Persister)
 	sc.rf = raft.Make(servers, me, persister, sc.applyCh)
 
 	// Your code here.
+	sc.mapCh = make(map[int] chan Op)
+	sc.mapRequest = make(map[int64]int) 
 
+	go func() {
+		for applyMsg := range sc.applyCh {
+			if applyMsg.CommandValid == false {
+				continue
+			}
+			op := applyMsg.Command.(Op)
+			sc.mu.Lock()
+			idRequest, ok := kv.mapRequest[op.ClientId]
+			if !ok || op.RequestId > idRequest {
+				switch op.Type {
+				case "Join":
+					//kv.db[op.Key] = op.Value
+				case "Leave":
+					//kv.db[op.Key] += op.Value
+				case "Move":
+					//
+				case "Query":
+					//
+				}
+				kv.mapRequest[op.ClientId] = op.RequestId
+			}
+			sc.mu.Unlock()
+			index := applyMsg.CommandIndex
+			channel := kv.putIfAbsent(index)
+			channel <- op
+		}
+	}()
 	return sc
 }

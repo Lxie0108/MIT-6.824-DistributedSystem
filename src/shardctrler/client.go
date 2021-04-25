@@ -12,6 +12,10 @@ import "math/big"
 type Clerk struct {
 	servers []*labrpc.ClientEnd
 	// Your data here.
+	lastleaderId int // remember which server turned out to be the leader for the last RPC
+	clientId int64 //client's unique identifier
+	requestId int //record the number of times of requests. If a client re-send the same request, requestId stays the same. Else +1. 
+				//it ensures that every request is executed just once.
 }
 
 func nrand() int64 {
@@ -25,6 +29,7 @@ func MakeClerk(servers []*labrpc.ClientEnd) *Clerk {
 	ck := new(Clerk)
 	ck.servers = servers
 	// Your code here.
+	ck.clientId = nrand() //random generated unique id.
 	return ck
 }
 
