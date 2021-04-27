@@ -23,7 +23,7 @@ type ShardCtrler struct {
 
 type Op struct {
 	// Your data here.
-	Type string //such as Put/Append
+	Type string //such as Join/Leave
 	ClientId int64
 	RequestId int
 }
@@ -31,18 +31,92 @@ type Op struct {
 
 func (sc *ShardCtrler) Join(args *JoinArgs, reply *JoinReply) {
 	// Your code here.
+	op1 := Op {
+        Type: "Join", 
+        ClinetId: args.clientId,
+        RequestId: args.requestId,
+    }
+	reply.WrongLeader = true
+    index,_,isLeader := kv.rf.Start(op1)
+    if !isLeader{
+        return
+    }
+    channel := kv.putIfAbsent(index)
+    op2 := kv.waitCommitting(channel)
+    if op1.Type == op2.Type && op1.ClientId == op2.ClientId && op1.RequestId == op2.RequestId {//if not equal, it indicates that a the client's operation has failed
+		reply.WrongLeader = false
+        return
+    }
 }
 
 func (sc *ShardCtrler) Leave(args *LeaveArgs, reply *LeaveReply) {
 	// Your code here.
+	op1 := Op {
+        Type: "Leave", 
+        ClinetId: args.clientId,
+        RequestId: args.requestId,
+    }
+	reply.WrongLeader = true
+    index,_,isLeader := kv.rf.Start(op1)
+    if !isLeader{
+        return
+    }
+    channel := kv.putIfAbsent(index)
+    op2 := kv.waitCommitting(channel)
+    if op1.Type == op2.Type && op1.ClientId == op2.ClientId && op1.RequestId == op2.RequestId {//if not equal, it indicates that a the client's operation has failed
+		reply.WrongLeader = false
+        return
+    }
 }
 
 func (sc *ShardCtrler) Move(args *MoveArgs, reply *MoveReply) {
 	// Your code here.
+	op1 := Op {
+        Type: "Move", 
+        ClinetId: args.clientId,
+        RequestId: args.requestId,
+    }
+	reply.WrongLeader = true
+    index,_,isLeader := kv.rf.Start(op1)
+    if !isLeader{
+        return
+    }
+    channel := kv.putIfAbsent(index)
+    op2 := kv.waitCommitting(channel)
+    if op1.Type == op2.Type && op1.ClientId == op2.ClientId && op1.RequestId == op2.RequestId {//if not equal, it indicates that a the client's operation has failed
+		reply.WrongLeader = false
+        return
+    }
 }
 
 func (sc *ShardCtrler) Query(args *QueryArgs, reply *QueryReply) {
 	// Your code here.
+	op1 := Op {
+        Type: "Query", 
+        ClinetId: args.clientId,
+        RequestId: args.requestId,
+    }
+	reply.WrongLeader = true
+    index,_,isLeader := kv.rf.Start(op1)
+    if !isLeader{
+        return
+    }
+    channel := kv.putIfAbsent(index)
+    op2 := kv.waitCommitting(channel)
+    if op1.Type == op2.Type && op1.ClientId == op2.ClientId && op1.RequestId == op2.RequestId {//if not equal, it indicates that a the client's operation has failed
+		reply.WrongLeader = false
+        return
+    }
+}
+
+//added timeout logic so that client does not get blocked when raft leader can't commit/
+func (kv *KVServer) waitCommitting(channel chan Op) Op {
+	select {
+	case op2 := <- channel:
+		return op2
+	case <- time.After(500*time.Millisecond):
+		return Op{}
+	}
 }
 
 
