@@ -26,6 +26,7 @@ type Op struct {
 	Type string //such as Join/Leave
 	ClientId int64
 	RequestId int
+	Args interface{} // such as JoinArgs/LeaveArgs
 }
 
 
@@ -176,8 +177,13 @@ func StartServer(servers []*labrpc.ClientEnd, me int, persister *raft.Persister)
 			idRequest, ok := kv.mapRequest[op.ClientId]
 			if !ok || op.RequestId > idRequest {
 				switch op.Type {
-				case "Join":
-					//kv.db[op.Key] = op.Value
+				case "Join": //new GID -> servers mappings
+					args := op.Args.(JoinArgs)
+					config := sm.getConfig()
+					for k, v := range args.Servers{
+						config.Groups[k] = v 
+					}
+					sc.Reconfig(&config)
 				case "Leave":
 					//kv.db[op.Key] += op.Value
 				case "Move":
