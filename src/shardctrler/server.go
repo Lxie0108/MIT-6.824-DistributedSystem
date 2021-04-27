@@ -179,13 +179,18 @@ func StartServer(servers []*labrpc.ClientEnd, me int, persister *raft.Persister)
 				switch op.Type {
 				case "Join": //new GID -> servers mappings
 					args := op.Args.(JoinArgs)
-					config := sm.getConfig()
+					config := sc.getConfig()
 					for k, v := range args.Servers{
 						config.Groups[k] = v 
 					}
 					sc.Reconfig(&config)
-				case "Leave":
-					//kv.db[op.Key] += op.Value
+				case "Leave": // GID leaving and new config assigns those groups' shards to the remaining groups
+					args := op.Args.(LeaveArgs)
+					config := sc.getConfig()
+					for _,gid := range args.GIDs{
+						delete(config.Groups,gid)
+					}
+					sc.Reconfig(&config)
 				case "Move":
 					//
 				case "Query":
