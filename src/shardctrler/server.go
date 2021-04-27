@@ -191,8 +191,15 @@ func StartServer(servers []*labrpc.ClientEnd, me int, persister *raft.Persister)
 						delete(config.Groups,gid)
 					}
 					sc.Reconfig(&config)
-				case "Move":
-					//
+				case "Move": //assign shard to gid
+					args := op.Args.(MoveArgs)
+					config := sc.getConfig()
+					if _,exists := config.Groups[args.GID]; exists {
+						config.Shards[args.Shard] = args.GID
+					} else {
+						return
+					}
+					sc.Reconfig(&config)
 				case "Query":
 					//
 				}
