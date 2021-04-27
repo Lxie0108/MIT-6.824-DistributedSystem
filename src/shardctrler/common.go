@@ -36,6 +36,8 @@ type Err string
 
 type JoinArgs struct {
 	Servers map[int][]string // new GID -> servers mappings
+	ClientId int
+	RequestId int
 }
 
 type JoinReply struct {
@@ -45,6 +47,8 @@ type JoinReply struct {
 
 type LeaveArgs struct {
 	GIDs []int // GID leaving and new config assigns those groups' shards to the remaining groups
+	ClientId int
+	RequestId int
 }
 
 type LeaveReply struct {
@@ -55,6 +59,8 @@ type LeaveReply struct {
 type MoveArgs struct { //assign shard to gid
 	Shard int //shard -> gid ?
 	GID   int
+	ClientId int
+	RequestId int
 }
 
 type MoveReply struct {
