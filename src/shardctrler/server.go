@@ -151,6 +151,18 @@ func (sc *ShardCtrler) getConfig() Config {
 	return sc.configs[len(sc.configs) - 1].copy()
 }
 
+//Do reconfiguration by adjusting shards after each op.Type.
+func (sc *ShardCtrler) reconfig(config *Config, opType string){
+	switch opType {
+	case "Move":
+		//
+	case "Join":
+		//
+	case "Leave":
+		//
+	}
+}
+
 
 //
 // servers[] contains the ports of the set of
@@ -189,14 +201,14 @@ func StartServer(servers []*labrpc.ClientEnd, me int, persister *raft.Persister)
 					for k, v := range args.Servers{
 						config.Groups[k] = v 
 					}
-					sc.Reconfig(&config)
+					sc.reconfig(&config,"Join")
 				case "Leave": // GID leaving and new config assigns those groups' shards to the remaining groups
 					args := op.Args.(LeaveArgs)
 					config := sc.getConfig()
 					for _,gid := range args.GIDs{
 						delete(config.Groups,gid)
 					}
-					sc.Reconfig(&config)
+					sc.reconfig(&config,"Leave")
 				case "Move": //assign shard to gid
 					args := op.Args.(MoveArgs)
 					config := sc.getConfig()
@@ -205,7 +217,7 @@ func StartServer(servers []*labrpc.ClientEnd, me int, persister *raft.Persister)
 					} else {
 						return
 					}
-					sc.Reconfig(&config)
+					sc.reconfig(&config,"Move")
 				case "Query":
 					//
 				}
