@@ -146,6 +146,12 @@ func (sc *ShardCtrler) putIfAbsent(index int) chan Op {
 	return sc.mapCh[index]
 }
 
+//return a copy of the current config.
+func (sc *ShardCtrler) getConfig() Config {
+	return sc.configs[len(sc.configs) - 1].copy()
+}
+
+
 //
 // servers[] contains the ports of the set of
 // servers that will cooperate via Raft to
