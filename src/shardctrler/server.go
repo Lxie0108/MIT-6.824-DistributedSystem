@@ -153,16 +153,26 @@ func (sc *ShardCtrler) getConfig() Config {
 
 //Do reconfiguration by adjusting shards after each op.Type.
 func (sc *ShardCtrler) reconfig(config *Config, opType string){
+	mapGidShard := map[int][]int{} // gid -> number of shard
+	for _, gid := range config.Groups {
+        for _, shard := range config.Shards {
+            mapGidShard[shard] = append(mapGidShard[shard], gid)
+        }
+    }
+
 	switch opType {
 	case "Move":
 		//
 	case "Join":
-		//
+		//the new configuration should divide the shards as evenly as possible among the groups, and should move as few shards as possible to achieve that goal.
+		average := NShards / len(config.Groups) //num of shards that should be moved to new group
+		for i := 0; i < average; i++ {
+           
+        }
 	case "Leave":
 		//
 	}
 }
-
 
 //
 // servers[] contains the ports of the set of
