@@ -152,7 +152,7 @@ func (sc *ShardCtrler) getConfig() Config {
 }
 
 //Do reconfiguration by adjusting shards after each op.Type.
-func (sc *ShardCtrler) reconfig(config *Config, opType string){
+func (sc *ShardCtrler) reconfig(config *Config, opType string, changedGid int){
 	mapGidShard := map[int][]int{} // gid -> number of shard
 	for _, gid := range config.Groups {
         for _, shard := range config.Shards {
@@ -167,7 +167,16 @@ func (sc *ShardCtrler) reconfig(config *Config, opType string){
 		//the new configuration should divide the shards as evenly as possible among the groups, and should move as few shards as possible to achieve that goal.
 		average := NShards / len(config.Groups) //num of shards that should be moved to new group
 		for i := 0; i < average; i++ {
-           
+			max := -100
+			targetGid := -100
+        	for gid, shard := range mapGidShard{ // find gid that has the largest number of shards
+			   if max <= len(shard) {
+				   max = len(shard)
+				   targetGid = gid
+			   }
+			}
+			config.Shards[mapGidShard[targetGid][0]] = changedGid //shard -> new joined gid
+            mapGidShard[targetGid]--
         }
 	case "Leave":
 		//
@@ -211,14 +220,14 @@ func StartServer(servers []*labrpc.ClientEnd, me int, persister *raft.Persister)
 					for k, v := range args.Servers{
 						config.Groups[k] = v 
 					}
-					sc.reconfig(&config,"Join")
+					sc.reconfig(&config,"Join",k)
 				case "Leave": // GID leaving and new config assigns those groups' shards to the remaining groups
 					args := op.Args.(LeaveArgs)
 					config := sc.getConfig()
 					for _,gid := range args.GIDs{
 						delete(config.Groups,gid)
 					}
-					sc.reconfig(&config,"Leave")
+					sc.reconfig(&config,"Leave",k)
 				case "Move": //assign shard to gid
 					args := op.Args.(MoveArgs)
 					config := sc.getConfig()
@@ -227,7 +236,7 @@ func StartServer(servers []*labrpc.ClientEnd, me int, persister *raft.Persister)
 					} else {
 						return
 					}
-					sc.reconfig(&config,"Move")
+					sc.reconfig(&config,"Move",k)
 				case "Query":
 					//
 				}
