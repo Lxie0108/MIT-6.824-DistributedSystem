@@ -5,6 +5,7 @@ import "6.824/raft"
 import "6.824/labrpc"
 import "sync"
 import "6.824/labgob"
+import "math"
 
 
 type ShardCtrler struct {
@@ -167,7 +168,7 @@ func (sc *ShardCtrler) reconfig(config *Config, opType string, changedGid int){
 		//the new configuration should divide the shards as evenly as possible among the groups, and should move as few shards as possible to achieve that goal.
 		average := NShards / len(config.Groups) //num of shards that should be moved to new group
 		for i := 0; i < average; i++ {
-			max := -100
+			max := - math.MaxInt32
 			targetGid := -100
         	for gid, shard := range mapGidShard{ // find gid that has the largest number of shards
 			   if max <= len(shard) {
@@ -176,10 +177,30 @@ func (sc *ShardCtrler) reconfig(config *Config, opType string, changedGid int){
 			   }
 			}
 			config.Shards[mapGidShard[targetGid][0]] = changedGid //shard -> new joined gid
-            mapGidShard[targetGid]--
+            mapGidShard[targetGid] = mapGidShard[targetGid][1:] 
         }
 	case "Leave":
-		//
+		//similar to Join() 
+		shardsToRemove, exists := mapGidShard[changedGid]
+		if !exists {
+			return
+		}
+		delete(mapGidShard, changedGid)
+		if len(config.Groups) == 0 { //removed all
+			config.Shards = [NShards]int{}
+		} else {
+			for  _, shard := range shardsToRemove {
+				min := math.MaxInt32
+				targetGid := -100
+				for gid, shard := range mapGidShard{ // find gid that has the largest number of shards
+				if min >= len(shard) {
+					min = len(shard)
+					targetGid = gid
+				}
+				config.Shards[shard] = changedGid //shard -> new joined gid
+				mapGidShard[targetGid] = append(mapGidShard[targetGid],shard)
+			}
+		}
 	}
 }
 
