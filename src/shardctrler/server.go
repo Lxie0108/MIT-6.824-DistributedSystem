@@ -232,6 +232,14 @@ func StartServer(servers []*labrpc.ClientEnd, me int, persister *raft.Persister)
 	sc.configs[0].Groups = map[int][]string{}
 
 	labgob.Register(Op{})
+	labgob.Register(JoinArgs{})
+	labgob.Register(LeaveArgs{})
+	labgob.Register(MoveArgs{})
+	labgob.Register(QueryArgs{})
+	labgob.Register(JoinReply{})
+	labgob.Register(LeaveReply{})
+	labgob.Register(MoveReply{})
+	labgob.Register(QueryReply{})
 	sc.applyCh = make(chan raft.ApplyMsg)
 	sc.rf = raft.Make(servers, me, persister, sc.applyCh)
 
@@ -254,7 +262,8 @@ func StartServer(servers []*labrpc.ClientEnd, me int, persister *raft.Persister)
 					config := sc.getConfig()
 					for gid, server := range args.Servers{
 						config.Groups[gid] = server
-						sc.reconfig(&config,"Join",gid) 
+						sc.reconfig(&config,"Join",gid)
+						sc.configs = append(sc.configs, config) 
 					}
 				case "Leave": // GID leaving and new config assigns those groups' shards to the remaining groups
 					args := op.Args.(LeaveArgs)
@@ -262,6 +271,7 @@ func StartServer(servers []*labrpc.ClientEnd, me int, persister *raft.Persister)
 					for _,gid := range args.GIDs{
 						delete(config.Groups,gid)
 						sc.reconfig(&config,"Leave",gid)
+						sc.configs = append(sc.configs, config) 
 					}
 				case "Move": //assign shard to gid
 					args := op.Args.(MoveArgs)
