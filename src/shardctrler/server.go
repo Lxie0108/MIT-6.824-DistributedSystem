@@ -6,6 +6,7 @@ import "6.824/labrpc"
 import "sync"
 import "6.824/labgob"
 import "math"
+import "time"
 
 
 type ShardCtrler struct {
@@ -35,16 +36,17 @@ func (sc *ShardCtrler) Join(args *JoinArgs, reply *JoinReply) {
 	// Your code here.
 	op1 := Op {
         Type: "Join", 
-        ClinetId: args.clientId,
-        RequestId: args.requestId,
+        ClientId: args.ClientId,
+        RequestId: args.RequestId,
+		Args: *args,
     }
 	reply.WrongLeader = true
-    index,_,isLeader := kv.rf.Start(op1)
+    index,_,isLeader := sc.rf.Start(op1)
     if !isLeader{
         return
     }
-    channel := kv.putIfAbsent(index)
-    op2 := kv.waitCommitting(channel)
+    channel := sc.putIfAbsent(index)
+    op2 := sc.waitCommitting(channel)
     if op1.Type == op2.Type && op1.ClientId == op2.ClientId && op1.RequestId == op2.RequestId {//if not equal, it indicates that a the client's operation has failed
 		reply.WrongLeader = false
         return
@@ -55,16 +57,17 @@ func (sc *ShardCtrler) Leave(args *LeaveArgs, reply *LeaveReply) {
 	// Your code here.
 	op1 := Op {
         Type: "Leave", 
-        ClinetId: args.clientId,
-        RequestId: args.requestId,
+        ClientId: args.ClientId,
+        RequestId: args.RequestId,
+		Args: *args,
     }
 	reply.WrongLeader = true
-    index,_,isLeader := kv.rf.Start(op1)
+    index,_,isLeader := sc.rf.Start(op1)
     if !isLeader{
         return
     }
-    channel := kv.putIfAbsent(index)
-    op2 := kv.waitCommitting(channel)
+    channel := sc.putIfAbsent(index)
+    op2 := sc.waitCommitting(channel)
     if op1.Type == op2.Type && op1.ClientId == op2.ClientId && op1.RequestId == op2.RequestId {//if not equal, it indicates that a the client's operation has failed
 		reply.WrongLeader = false
         return
@@ -75,16 +78,17 @@ func (sc *ShardCtrler) Move(args *MoveArgs, reply *MoveReply) {
 	// Your code here.
 	op1 := Op {
         Type: "Move", 
-        ClinetId: args.clientId,
-        RequestId: args.requestId,
+        ClientId: args.ClientId,
+        RequestId: args.RequestId,
+		Args: *args,
     }
 	reply.WrongLeader = true
-    index,_,isLeader := kv.rf.Start(op1)
+    index,_,isLeader := sc.rf.Start(op1)
     if !isLeader{
         return
     }
-    channel := kv.putIfAbsent(index)
-    op2 := kv.waitCommitting(channel)
+    channel := sc.putIfAbsent(index)
+    op2 := sc.waitCommitting(channel)
     if op1.Type == op2.Type && op1.ClientId == op2.ClientId && op1.RequestId == op2.RequestId {//if not equal, it indicates that a the client's operation has failed
 		reply.WrongLeader = false
         return
@@ -95,16 +99,17 @@ func (sc *ShardCtrler) Query(args *QueryArgs, reply *QueryReply) {
 	// Your code here.
 	op1 := Op {
         Type: "Query", 
-        ClinetId: args.clientId,
-        RequestId: args.requestId,
+        ClientId: args.ClientId,
+        RequestId: args.RequestId,
+		Args: *args,
     }
 	reply.WrongLeader = true
-    index,_,isLeader := kv.rf.Start(op1)
+    index,_,isLeader := sc.rf.Start(op1)
     if !isLeader{
         return
     }
-    channel := kv.putIfAbsent(index)
-    op2 := kv.waitCommitting(channel)
+    channel := sc.putIfAbsent(index)
+    op2 := sc.waitCommitting(channel)
     if op1.Type == op2.Type && op1.ClientId == op2.ClientId && op1.RequestId == op2.RequestId {//if not equal, it indicates that a the client's operation has failed
 		reply.WrongLeader = false
         return
@@ -112,7 +117,7 @@ func (sc *ShardCtrler) Query(args *QueryArgs, reply *QueryReply) {
 }
 
 //added timeout logic so that client does not get blocked when raft leader can't commit/
-func (kv *KVServer) waitCommitting(channel chan Op) Op {
+func (sc *ShardCtrler) waitCommitting(channel chan Op) Op {
 	select {
 	case op2 := <- channel:
 		return op2
@@ -133,7 +138,7 @@ func (sc *ShardCtrler) Kill() {
 	// Your code here, if desired.
 }
 
-// needed by shardkv tester
+// needed by shardsc tester
 func (sc *ShardCtrler) Raft() *raft.Raft {
 	return sc.rf
 }
@@ -148,17 +153,18 @@ func (sc *ShardCtrler) putIfAbsent(index int) chan Op {
 }
 
 //return a copy of the current config.
-func (sc *ShardCtrler) getConfig() Config {
+func (sc *ShardCtrler) getConfig() Config{
 	return sc.configs[len(sc.configs) - 1].copy()
 }
 
 //Do reconfiguration by adjusting shards after each op.Type.
 func (sc *ShardCtrler) reconfig(config *Config, opType string, changedGid int){
 	mapGidShard := map[int][]int{} // gid -> number of shard
-	for _, gid := range config.Groups {
-        for _, shard := range config.Shards {
-            mapGidShard[shard] = append(mapGidShard[shard], gid)
-        }
+	for gid,_ := range config.Groups {
+        mapGidShard[gid] = []int{}
+    }
+    for shard, gid := range config.Shards {
+        mapGidShard[gid] = append(mapGidShard[gid], shard)
     }
 
 	switch opType {
@@ -193,9 +199,10 @@ func (sc *ShardCtrler) reconfig(config *Config, opType string, changedGid int){
 				min := math.MaxInt32
 				targetGid := -100
 				for gid, shard := range mapGidShard{ // find gid that has the largest number of shards
-				if min >= len(shard) {
-					min = len(shard)
-					targetGid = gid
+					if min >= len(shard) {
+						min = len(shard)
+						targetGid = gid
+					}
 				}
 				config.Shards[shard] = changedGid //shard -> new joined gid
 				mapGidShard[targetGid] = append(mapGidShard[targetGid],shard)
@@ -232,23 +239,23 @@ func StartServer(servers []*labrpc.ClientEnd, me int, persister *raft.Persister)
 			}
 			op := applyMsg.Command.(Op)
 			sc.mu.Lock()
-			idRequest, ok := kv.mapRequest[op.ClientId]
+			idRequest, ok := sc.mapRequest[op.ClientId]
 			if !ok || op.RequestId > idRequest {
 				switch op.Type {
 				case "Join": //new GID -> servers mappings
 					args := op.Args.(JoinArgs)
 					config := sc.getConfig()
-					for k, v := range args.Servers{
-						config.Groups[k] = v 
+					for gid, server := range args.Servers{
+						config.Groups[gid] = server
+						sc.reconfig(&config,"Join",gid) 
 					}
-					sc.reconfig(&config,"Join",k)
 				case "Leave": // GID leaving and new config assigns those groups' shards to the remaining groups
 					args := op.Args.(LeaveArgs)
 					config := sc.getConfig()
 					for _,gid := range args.GIDs{
 						delete(config.Groups,gid)
+						sc.reconfig(&config,"Leave",gid)
 					}
-					sc.reconfig(&config,"Leave",k)
 				case "Move": //assign shard to gid
 					args := op.Args.(MoveArgs)
 					config := sc.getConfig()
@@ -257,15 +264,14 @@ func StartServer(servers []*labrpc.ClientEnd, me int, persister *raft.Persister)
 					} else {
 						return
 					}
-					sc.reconfig(&config,"Move",k)
 				case "Query":
 					//
 				}
-				kv.mapRequest[op.ClientId] = op.RequestId
+				sc.mapRequest[op.ClientId] = op.RequestId
 			}
 			sc.mu.Unlock()
 			index := applyMsg.CommandIndex
-			channel := kv.putIfAbsent(index)
+			channel := sc.putIfAbsent(index)
 			channel <- op
 		}
 	}()
