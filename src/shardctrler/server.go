@@ -100,7 +100,7 @@ func (sc *ShardCtrler) Query(args *QueryArgs, reply *QueryReply) {
 	op1 := Op {
         Type: "Query", 
         ClientId: args.ClientId,
-        RequestId: args.RequestId,
+        RequestId: -1,
 		Args: *args,
     }
 	reply.WrongLeader = true
@@ -114,6 +114,13 @@ func (sc *ShardCtrler) Query(args *QueryArgs, reply *QueryReply) {
 		reply.WrongLeader = false
         return
     }
+	if !reply.WrongLeader {
+		if args.Num < 0 || args.Num >=  len(sc.configs) {
+            reply.Config = sc.configs[len(sc.configs) - 1]
+        } else {
+            reply.Config = sc.configs[args.Num]
+        }
+	}
 }
 
 //added timeout logic so that client does not get blocked when raft leader can't commit/
@@ -154,7 +161,7 @@ func (sc *ShardCtrler) putIfAbsent(index int) chan Op {
 
 //return a copy of the current config.
 func (sc *ShardCtrler) getConfig() Config{
-	return sc.configs[len(sc.configs) - 1].copy()
+	return sc.configs[len(sc.configs) - 1]
 }
 
 //Do reconfiguration by adjusting shards after each op.Type.

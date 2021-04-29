@@ -37,6 +37,7 @@ func (ck *Clerk) Query(num int) Config {
 	args := &QueryArgs{}
 	// Your code here.
 	args.Num = num
+	args.ClientId = ck.clientId
 	for {
 		// try each known server.
 		for _, srv := range ck.servers {

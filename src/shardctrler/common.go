@@ -70,6 +70,8 @@ type MoveReply struct {
 
 type QueryArgs struct {
 	Num int // desired config number
+	ClientId int64
+	RequestId int
 }
 
 type QueryReply struct {
