@@ -112,7 +112,6 @@ func (sc *ShardCtrler) Query(args *QueryArgs, reply *QueryReply) {
     op2 := sc.waitCommitting(channel)
     if op1.Type == op2.Type && op1.ClientId == op2.ClientId && op1.RequestId == op2.RequestId {//if not equal, it indicates that a the client's operation has failed
 		reply.WrongLeader = false
-        return
     }
 	if !reply.WrongLeader {
 		if args.Num < 0 || args.Num >=  len(sc.configs) {
@@ -211,7 +210,7 @@ func (sc *ShardCtrler) reconfig(config *Config, opType string, changedGid int){
 						targetGid = gid
 					}
 				}
-				config.Shards[shard] = changedGid //shard -> new joined gid
+				config.Shards[shard] = targetGid //shard -> new joined gid
 				mapGidShard[targetGid] = append(mapGidShard[targetGid],shard)
 			}
 		}

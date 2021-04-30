@@ -79,3 +79,15 @@ type QueryReply struct {
 	Err         Err
 	Config      Config //latest configuration.
 }
+
+func (c Config) copy() Config {
+	copied := Config{
+		Num:    c.Num,
+		Shards: c.Shards,
+		Groups: make(map[int][]string),
+	}
+	for k, v := range c.Groups {
+		copied.Groups[k] = v
+	}
+	return copied
+}
