@@ -113,8 +113,8 @@ func (sc *ShardCtrler) Query(args *QueryArgs, reply *QueryReply) {
     if op1.Type == op2.Type && op1.ClientId == op2.ClientId && op1.RequestId == op2.RequestId {//if not equal, it indicates that a the client's operation has failed
 		reply.WrongLeader = false
     }
-	if !reply.WrongLeader {
-		if args.Num < 0 || args.Num >=  len(sc.configs) {
+	if !reply.WrongLeader {//If args.Num is -1 or larger or equal to the biggest known config number, reply with latest config
+		if args.Num < 0 || args.Num >= len(sc.configs) {
             reply.Config = sc.configs[len(sc.configs) - 1]
         } else {
             reply.Config = sc.configs[args.Num]
@@ -158,7 +158,7 @@ func (sc *ShardCtrler) putIfAbsent(index int) chan Op {
 	return sc.mapCh[index]
 }
 
-//return a copy of the current config.
+//return a copy of the latest config with Num+1
 func (sc *ShardCtrler) getConfig() Config{
 	return sc.configs[len(sc.configs) - 1].copy()
 }
@@ -193,15 +193,16 @@ func (sc *ShardCtrler) reconfig(config *Config, opType string, changedGid int){
         }
 	case "Leave":
 		//similar to Join() 
-		shardsToRemove, exists := mapGidShard[changedGid]
+		//Distribute the shards of the leaving group(Gid) to those who has the least shards until all shards have been distributed
+		shardsToDistribute, exists := mapGidShard[changedGid]
 		if !exists {
 			return
 		}
 		delete(mapGidShard, changedGid)
-		if len(config.Groups) == 0 { //removed all
+		if len(config.Groups) == 0 { //has removed all
 			config.Shards = [NShards]int{}
 		} else {
-			for  _, shard := range shardsToRemove {
+			for  _, shard := range shardsToDistribute {
 				min := math.MaxInt32
 				targetGid := -100
 				for gid, shard := range mapGidShard{ // find gid that has the largest number of shards
@@ -275,7 +276,6 @@ func StartServer(servers []*labrpc.ClientEnd, me int, persister *raft.Persister)
 				case "Move": //assign shard to gid
 					args := op.Args.(MoveArgs)
 					config := sc.getConfig()
-					config.Num++ //move should increase Config.Num
 					if _,exists := config.Groups[args.GID]; exists {
 						config.Shards[args.Shard] = args.GID
 						sc.configs = append(sc.configs, config)
@@ -283,7 +283,7 @@ func StartServer(servers []*labrpc.ClientEnd, me int, persister *raft.Persister)
 						return
 					}
 				case "Query":
-					//
+					
 				}
 				sc.mapRequest[op.ClientId] = op.RequestId
 			}
