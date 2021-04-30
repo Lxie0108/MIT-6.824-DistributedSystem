@@ -82,7 +82,7 @@ type QueryReply struct {
 
 func (c Config) copy() Config {
 	copied := Config{
-		Num:    c.Num,
+		Num:    c.Num+1,
 		Shards: c.Shards,
 		Groups: make(map[int][]string),
 	}

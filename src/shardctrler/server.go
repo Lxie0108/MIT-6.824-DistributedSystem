@@ -160,7 +160,7 @@ func (sc *ShardCtrler) putIfAbsent(index int) chan Op {
 
 //return a copy of the current config.
 func (sc *ShardCtrler) getConfig() Config{
-	return sc.configs[len(sc.configs) - 1]
+	return sc.configs[len(sc.configs) - 1].copy()
 }
 
 //Do reconfiguration by adjusting shards after each op.Type.
@@ -275,8 +275,10 @@ func StartServer(servers []*labrpc.ClientEnd, me int, persister *raft.Persister)
 				case "Move": //assign shard to gid
 					args := op.Args.(MoveArgs)
 					config := sc.getConfig()
+					config.Num++ //move should increase Config.Num
 					if _,exists := config.Groups[args.GID]; exists {
 						config.Shards[args.Shard] = args.GID
+						sc.configs = append(sc.configs, config)
 					} else {
 						return
 					}
